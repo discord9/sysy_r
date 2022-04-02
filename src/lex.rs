@@ -63,15 +63,16 @@ fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         $ident_init $ident_subseq* => |lexer| {
             lexer.return_(SyntaxKind::Ident)
         },
+        $whitespace = SyntaxKind::Whitespace,
     };
     Lexer::new(text)
     .into_iter()
     .map(|tok|{tok.unwrap()}).collect()
 }
 
+
 #[test]
 fn test_lex(){
     let res = lex("123.456e4");
     println!("{:?}",res);
-
 }
