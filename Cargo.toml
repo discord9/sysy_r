@@ -6,4 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+lexgen = "0.10.0"
+lexgen_util = "0.10.0"
 rowan = "0.15.4"

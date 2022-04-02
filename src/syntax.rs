@@ -1,14 +1,14 @@
-/// define all possible tokens that may appear in sysY language.
+/// define all possible tokens and nodes' type tag that may appear in sysY language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 //#[allow(non_camel_case_types)]
 #[repr(u16)]
 #[allow(unused)]//to be REMOVE!
 pub enum SyntaxKind{
-    BType = 0, // 'int' | 'float' | 'void'
+    BType = 0, // basic type like 'int' | 'float' | 'void'
     Ident, // [a-zA-Z][a-zA-Z0-9]*
     // keywords
     ConstKeyword, // 'const'
-    IFKeyword,
+    IfKeyword,
     ElseKeyword,
     WhileKeyword,
     BreakKeyword,
@@ -23,9 +23,9 @@ pub enum SyntaxKind{
     RCurly,// }
     LSquare,// [
     RSquare,// ]
-    // operator
-    UnaryOP,// unary op '+' '-' '!', '!' only appear in Cond
-    BinaryOP,// * / % + - < > <= >= == != && ||
+    // Operator
+    // unary op '+' '-' '!', '!' only appear in Cond
+    Operator,// * / % + - < > <= >= == != && ||
     // literal const
     IntConst,
     FloatConst,
@@ -65,7 +65,7 @@ pub enum SyntaxKind{
     LogicOrExp,
     ConstExp,
     // end here
-    EndMark,
+    EndMark,// shoud not appear in token stream, purely use as a end mark
 }
 
 
@@ -77,5 +77,21 @@ pub enum SyntaxKind{
 impl From<SyntaxKind> for rowan::SyntaxKind {
     fn from(kind: SyntaxKind) -> Self {
         Self(kind as u16)
+    }
+}
+
+/// Second, implementing the `Language` trait teaches rowan to convert between
+/// these two SyntaxKind types, allowing for a nicer SyntaxNode API where
+/// "kinds" are values from our `enum SyntaxKind`, instead of plain u16 values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Lang {}
+impl rowan::Language for Lang {
+    type Kind = SyntaxKind;
+    fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
+        assert!(raw.0 < SyntaxKind::EndMark as u16);
+        unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
+    }
+    fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
+        kind.into()
     }
 }
