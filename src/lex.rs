@@ -3,18 +3,20 @@ use lexgen::lexer;
 use lexgen_util::Loc;
 /// Split the input string into a flat list of tokens
 /// (such as L_PAREN, WORD, and WHITESPACE)
-fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
+pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
     lexer! {
         Lexer -> SyntaxKind;
 
         let whitespace = [' ' '\t' '\n'] | "\r\n";
+        let comment_oneline = "//" (_ # ['\r' '\n'])*;
+        let comment_multiline = "/*" _* "*/";
         let ident_init = ['a'-'z'];
         let ident_subseq = $ident_init | ['A'-'Z' '0'-'9' '-' '_'];
         let digit = ['0' - '9'];
         let hex_digit = ['a'-'f' 'A'-'F' '0'-'9'];
         let hex_prefix = "0x" | "0X";
-
-        let int_const =  ['1'-'9']['0'-'9']+ | 'o'['0'-'7']+ | $hex_prefix ['0' - '9' 'a' - 'f' 'A' - 'F']+;
+        // original iso not include zero????
+        let int_const =  '0' | ['1'-'9']['0'-'9']* | 'o'['0'-'7']+ | $hex_prefix ['0' - '9' 'a' - 'f' 'A' - 'F']+;
 
         let frac_const = $digit* '.' $digit+ | $digit+ '.';
         let sign = '+' | '-';
@@ -52,7 +54,7 @@ fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
             };
             lexer.return_(ret)
         },
-        "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||"   => |lexer| {
+        "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "="   => |lexer| {
             // "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" 
             lexer.return_(SyntaxKind::Operator)
         },
@@ -63,16 +65,85 @@ fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         $ident_init $ident_subseq* => |lexer| {
             lexer.return_(SyntaxKind::Ident)
         },
-        $whitespace = SyntaxKind::Whitespace,
+        $whitespace* = SyntaxKind::Whitespace,
+        $comment_oneline | $comment_multiline = {
+            SyntaxKind::Comment
+        },
+        _ = SyntaxKind::Error,
     };
     Lexer::new(text)
     .into_iter()
-    .map(|tok|{tok.unwrap()}).collect()
+    .map(|tok|{
+        match tok{
+            Ok(tok)=> tok,
+            Err(tok) =>(tok.location, SyntaxKind::Error, tok.location),
+        }
+    }
+    ).collect()
 }
 
-
+#[test]
+fn test_comment(){
+    {
+        let text = r"
+        // one line 
+        fn main(){
+            print(42);
+            /* test
+            of 
+            multiple
+            line */
+        }
+        ";
+        let res = lex(text);
+        for tok in res{
+            let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            println!("\'{}\'=>{:?} ", src,tok.1);
+        }
+    }
+    {
+        let text = r"
+        // one line 
+        /* test
+        of 
+        multiple
+        line */
+        ";
+        let res = lex(text);
+        println!("Test 2:");
+        for &tok in &res{
+            let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            println!("\'{}\'=>{:?} ", src,tok.1);
+        }
+        assert_eq!(res.get(1).to_owned().unwrap().1, SyntaxKind::Comment);
+        assert_eq!(res.get(3).to_owned().unwrap().1, SyntaxKind::Comment);
+    }
+}
 #[test]
 fn test_lex(){
     let res = lex("123.456e4");
     println!("{:?}",res);
+    let res = lex("//hello world");
+    println!("{:?}",res);
+    let long_text = r"
+int main(){
+    for(int i=0; i < 5;i=i+1){
+        print(1,2,3);
+        if(i == 4 && !i%4=0){
+            break;
+        }else{//one line comment
+            continue;
+        }/*
+        a
+        b
+        c */
+    }
+}
+    ";
+    let res = lex(long_text);
+    for tok in res{
+        let src = long_text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+        println!("\'{}\'=>{:?} ", src,tok.1);
+    }
+    //println!("{:?}",res);
 }
