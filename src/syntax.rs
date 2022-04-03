@@ -134,6 +134,13 @@ impl Parser{
         let (kind, text) = self.tokens.pop().unwrap();
         self.builder.token(kind.into(), text.as_str());
     }
+    /// Push a error node
+    fn push_err(&mut self, err_msg: &str){
+        self.builder.start_node(SyntaxKind::Error.into());
+        self.errors.push(err_msg.to_string());
+        self.bump();
+        self.builder.finish_node();
+    }
     /// Peek at the first unprocessed token
     fn current(&self) -> Option<SyntaxKind> {
         self.tokens.last().map(|(kind, _)| *kind)
@@ -157,14 +164,47 @@ impl Parser{
     fn comp_unit(&mut self){
         loop{
             self.builder.start_node(SyntaxKind::CompUnit.into());
-            match self.peek(2){
-                Some(SyntaxKind::LParen)=>{
+            match self.peek(0){
+                Some(SyntaxKind::ConstKeyword)=>{
 
                 },
                 _ => ()
             }
-            
+            self.builder.finish_node();
         };
+    }
+    /// Decl -> ConstDecl | VarDecl
+    fn decl(&mut self){
+
+    }
+    /// ConstDecl -> `const` BType ConstDef {`,` ConstDef }`;`
+    fn const_decl(&mut self){
+        self.builder.start_node(SyntaxKind::ConstDecl.into());
+        assert_eq!(self.current().unwrap(), SyntaxKind::ConstKeyword);
+        match self.current(){
+            Some(SyntaxKind::ConstKeyword)=>{
+                self.bump();// eat `const`
+                self.b_type();
+            },
+            _=>{
+                self.push_err("Expect `const`");
+            },
+        };
+        self.builder.finish_node();
+    }
+    /// ConstDef -> Ident {`[` ConstExp `]` `=` ConstInitVal}
+    /// BType -> `int` | `float`
+    fn b_type(&mut self){
+        match self.current(){
+            Some(SyntaxKind::BType)=>{
+                self.builder.start_node(SyntaxKind::ConstDecl.into());
+                self.bump();// eat BType
+                self.builder.finish_node();
+            },
+            _ => {
+                self.push_err("Expect `int` or `float`");// be sure to chug along in case of error
+            },
+        }
     }
 }
 
