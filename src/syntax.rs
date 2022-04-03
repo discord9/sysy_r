@@ -2,10 +2,10 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 //#[allow(non_camel_case_types)]
 #[repr(u16)]
-#[allow(unused)]//to be REMOVE!
-pub enum SyntaxKind{
+#[allow(unused)] //to be REMOVE!
+pub enum SyntaxKind {
     BType = 0, // basic type like 'int' | 'float' | 'void'
-    Ident, // [a-zA-Z][a-zA-Z0-9]*
+    Ident,     // [a-zA-Z][a-zA-Z0-9]*
     // keywords
     ConstKeyword, // 'const'
     IfKeyword,
@@ -15,23 +15,23 @@ pub enum SyntaxKind{
     ContinueKeyword,
     ReturnKeyword,
     // punctuation
-    Comma,// ,
-    Semicolon,// ;
-    LParen,// (
-    RParen,// )
-    LCurly,// {
-    RCurly,// }
-    LSquare,// [
-    RSquare,// ]
+    Comma,     // ,
+    Semicolon, // ;
+    LParen,    // (
+    RParen,    // )
+    LCurly,    // {
+    RCurly,    // }
+    LSquare,   // [
+    RSquare,   // ]
     // Operator
     // unary op '+' '-' '!', '!' only appear in Cond
-    Operator,// * / % + - < > <= >= == != && ||
+    Operator, // * / % + - < > <= >= == != && ||
     // literal const
     IntConst,
     FloatConst,
     Number,
     // whitespace and comment
-    Comment,// one line or multiline
+    Comment, // one line or multiline
     Whitespace,
     Error,
 
@@ -65,9 +65,8 @@ pub enum SyntaxKind{
     LogicOrExp,
     ConstExp,
     // end here
-    EndMark,// shoud not appear in token stream, purely use as a end mark
+    EndMark, // shoud not appear in token stream, purely use as a end mark
 }
-
 
 /// Some boilerplate is needed, as rowan settled on using its own
 /// `struct SyntaxKind(u16)` internally, instead of accepting the
@@ -84,7 +83,7 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
 /// these two SyntaxKind types, allowing for a nicer SyntaxNode API where
 /// "kinds" are values from our `enum SyntaxKind`, instead of plain u16 values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum Lang {}
+pub enum Lang {}
 impl rowan::Language for Lang {
     type Kind = SyntaxKind;
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
@@ -106,7 +105,25 @@ struct Parse {
     errors: Vec<String>,
 }
 
-struct Parser {
+/// To work with the parse results we need a view into the
+/// green tree - the Syntax tree.
+/// It is also immutable, like a GreenNode,
+/// but it contains parent pointers, offsets, and
+/// has identity semantics.
+
+type SyntaxNode = rowan::SyntaxNode<Lang>;
+#[allow(unused)]
+type SyntaxToken = rowan::SyntaxToken<Lang>;
+#[allow(unused)]
+type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
+
+impl Parse {
+    fn syntax(&self) -> SyntaxNode {
+        SyntaxNode::new_root(self.green_node.clone())
+    }
+}
+
+pub struct Parser {
     /// input tokens, including whitespace and comment
     tokens: Vec<(SyntaxKind, String)>,
     /// the in-progress tree.
@@ -115,14 +132,14 @@ struct Parser {
     /// so far.
     errors: Vec<String>,
 }
-
-impl Parser{
-    fn new(mut tokens: Vec<(SyntaxKind, String)>)->Self{
+use SyntaxKind as Kind;
+impl Parser {
+    fn new(mut tokens: Vec<(SyntaxKind, String)>) -> Self {
         tokens.reverse();
-        Parser { 
-            tokens: tokens, 
-            builder: GreenNodeBuilder::new(), 
-            errors: Vec::new()
+        Parser {
+            tokens: tokens,
+            builder: GreenNodeBuilder::new(),
+            errors: Vec::new(),
         }
     }
     /// start parsing
@@ -134,8 +151,15 @@ impl Parser{
         let (kind, text) = self.tokens.pop().unwrap();
         self.builder.token(kind.into(), text.as_str());
     }
+    /// bump expected token or push a error node with given error message
+    fn bump_expect(&mut self, expected: Kind, err_msg: &str) {
+        match self.current() {
+            Some(expected) => self.bump(),
+            _ => self.push_err(err_msg),
+        }
+    }
     /// Push a error node
-    fn push_err(&mut self, err_msg: &str){
+    fn push_err(&mut self, err_msg: &str) {
         self.builder.start_node(SyntaxKind::Error.into());
         self.errors.push(err_msg.to_string());
         self.bump();
@@ -145,66 +169,125 @@ impl Parser{
     fn current(&self) -> Option<SyntaxKind> {
         self.tokens.last().map(|(kind, _)| *kind)
     }
-    /// Peek ahead 
-    /// 
+    /// Peek ahead
+    ///
     /// `peek(0) == current()`
     fn peek(&self, ahead: usize) -> Option<SyntaxKind> {
-        self.tokens.get(self.tokens.len() - 1 - ahead)
-        .map(|(kind, _)| *kind)
+        self.tokens
+            .get(self.tokens.len() - 1 - ahead)
+            .map(|(kind, _)| *kind)
     }
     /// skip whitespace and comment
     fn skip_ws_cmt(&mut self) {
-        use SyntaxKind::{Whitespace, Comment};
-        while self.current() == Some(Whitespace) 
-           || self.current() == Some(Comment) {
+        use SyntaxKind::{Comment, Whitespace};
+        while self.current() == Some(Whitespace) || self.current() == Some(Comment) {
             self.bump()
         }
     }
     /// CompUnit -> (Decl | FuncDef) +
-    fn comp_unit(&mut self){
-        loop{
-            self.builder.start_node(SyntaxKind::CompUnit.into());
-            match self.peek(0){
-                Some(SyntaxKind::ConstKeyword)=>{
-
-                },
-                _ => ()
+    ///
+    /// TODO: uncomplete
+    fn comp_unit(&mut self) {
+        self.builder.start_node(SyntaxKind::CompUnit.into());
+        loop {
+            match self.peek(0) {
+                Some(SyntaxKind::ConstKeyword) => {
+                    self.const_decl();
+                    unimplemented!()
+                }
+                _ => break,
             }
-            self.builder.finish_node();
-        };
+        }
+        self.builder.finish_node();
     }
     /// Decl -> ConstDecl | VarDecl
-    fn decl(&mut self){
-
-    }
+    fn decl(&mut self) {}
     /// ConstDecl -> `const` BType ConstDef {`,` ConstDef }`;`
-    fn const_decl(&mut self){
+    fn const_decl(&mut self) {
         self.builder.start_node(SyntaxKind::ConstDecl.into());
-        assert_eq!(self.current().unwrap(), SyntaxKind::ConstKeyword);
-        match self.current(){
-            Some(SyntaxKind::ConstKeyword)=>{
-                self.bump();// eat `const`
+        match self.current() {
+            Some(Kind::ConstKeyword) => {
+                self.bump(); // eat `const`
                 self.b_type();
-            },
-            _=>{
+                loop {
+                    match self.current() {
+                        Some(Kind::Comma) => {
+                            self.bump();
+                            self.const_def();
+                        }
+                        Some(Kind::Semicolon) => {
+                            self.bump();
+                            break;
+                        }
+                        _ => self.push_err("Expect `,` or `;`."),
+                    }
+                }
+            }
+            _ => {
                 self.push_err("Expect `const`");
-            },
+            }
         };
         self.builder.finish_node();
     }
     /// ConstDef -> Ident {`[` ConstExp `]` `=` ConstInitVal}
+    fn const_def(&mut self) {
+        unimplemented!()
+    }
     /// BType -> `int` | `float`
-    fn b_type(&mut self){
-        match self.current(){
-            Some(SyntaxKind::BType)=>{
-                self.builder.start_node(SyntaxKind::ConstDecl.into());
-                self.bump();// eat BType
-                self.builder.finish_node();
-            },
-            _ => {
-                self.push_err("Expect `int` or `float`");// be sure to chug along in case of error
-            },
+    fn b_type(&mut self) {
+        self.builder.start_node(Kind::BType.into());
+        self.bump_expect(Kind::BType, "Expect `int` or `float`");
+        self.builder.finish_node();
+    }
+
+    /// Expression -> AddExp
+    fn exp(&mut self) {
+        unimplemented!()
+    }
+    /// LVal -> Ident { `[` Exp `]` }
+    fn left_value(&mut self) {
+        self.builder.start_node(Kind::LeftValue.into());
+        if let Some(Kind::Ident) = self.current() {
+            self.bump();
+            loop {
+                if let Some(Kind::LSquare) = self.current() {
+                    self.bump();
+                    self.exp();
+                    self.bump_expect(Kind::RSquare, "Expect `]`");
+                } else {
+                    break;
+                }
+            }
         }
+
+        self.builder.finish_node();
+    }
+    /// PrimaryExp -> `(` Exp `)` | LVal | Number
+    fn primary_exp(&mut self) {
+        self.builder.start_node(Kind::PrimaryExp.into());
+        match self.current() {
+            Some(Kind::LParen) => {
+                self.bump();
+                self.exp();
+                self.bump_expect(Kind::RParen, "Expect `)`.");
+            }
+            Some(Kind::Ident) => self.left_value(),
+            Some(Kind::IntConst) | Some(Kind::FloatConst) => self.number(),
+            _ => {
+                self.push_err("Expect Left parthness or left value or a number.");
+            }
+        }
+        self.builder.finish_node();
+    }
+
+    /// Number -> IntConst | FloatConst
+    fn number(&mut self) {
+        self.builder.start_node(Kind::Number.into());
+        match self.current() {
+            Some(Kind::IntConst) | Some(Kind::FloatConst) => self.bump(),
+            _ => self.push_err("Expect int number or floating number."),
+        }
+        self.builder.finish_node();
     }
 }
 
@@ -212,10 +295,62 @@ fn parse(text: &str) -> Parse {
     use crate::lex::lex;
     let text = r"hello=world";
     let tokens: Vec<(SyntaxKind, String)> = lex(text)
-    .into_iter()
-    .map(|tok|{
-        (tok.1, text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap().to_owned())
-    })
-    .collect();
+        .into_iter()
+        .map(|tok| {
+            (
+                tok.1,
+                text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap().to_owned(),
+            )
+        })
+        .collect();
     Parser::new(tokens).parse()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_number() {
+        use crate::lex::lex;
+        use crate::syntax::{Kind, Parse, Parser};
+        let text = r"42.3";
+        let tokens: Vec<(Kind, String)> = lex(text)
+            .into_iter()
+            .map(|tok| {
+                (
+                    tok.1,
+                    text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap().to_owned(),
+                )
+            })
+            .collect();
+        println!("Tokens: {:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        parser.number();
+        let res = Parse {
+            green_node: parser.builder.finish(),
+            errors: parser.errors,
+        };
+        let node = res.syntax();
+        println!("{:?}", node);
+        assert_eq!(
+            format!("{:?}", node),
+            "Number@0..4", // root node, spanning 15 bytes
+        );
+        //println!("{:?}", node.children_with_tokens());
+        let list = node
+            .children_with_tokens()
+            .map(|child| {
+                format!(
+                    "{:?}@{:?} \"{}\"",
+                    child.kind(),
+                    child.text_range(),
+                    text.get(child.text_range().start().into()..child.text_range().end().into()).unwrap()
+                )
+            })
+            .collect::<Vec<_>>();
+            for line in &list{
+                println!("  {}", line);
+            }
+            assert_eq!(list, vec!["FloatConst@0..4 \"42.3\"".to_string()]);
+        //assert_eq!(node.children().count(), 1);
+    }
 }

@@ -21,7 +21,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         let frac_const = $digit* '.' $digit+ | $digit+ '.';
         let sign = '+' | '-';
         let exp_part = 'e'$sign? $digit+ | 'E'$sign? $digit+;
-        let dec_float_const = $frac_const $exp_part | $digit+ $exp_part;
+        let dec_float_const = $frac_const $exp_part? | $digit+ $exp_part;
 
         "int" | "float" | "void" => |lexer| {
             lexer.return_(SyntaxKind::BType)
@@ -55,7 +55,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
             lexer.return_(ret)
         },
         "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "="   => |lexer| {
-            // "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" 
+            // "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||"
             lexer.return_(SyntaxKind::Operator)
         },
         // for literal const
@@ -72,18 +72,16 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         _ = SyntaxKind::Error,
     };
     Lexer::new(text)
-    .into_iter()
-    .map(|tok|{
-        match tok{
-            Ok(tok)=> tok,
-            Err(tok) =>(tok.location, SyntaxKind::Error, tok.location),
-        }
-    }
-    ).collect()
+        .into_iter()
+        .map(|tok| match tok {
+            Ok(tok) => tok,
+            Err(tok) => (tok.location, SyntaxKind::Error, tok.location),
+        })
+        .collect()
 }
 
 #[test]
-fn test_comment(){
+fn test_comment() {
     {
         let text = r"
         // one line 
@@ -96,9 +94,9 @@ fn test_comment(){
         }
         ";
         let res = lex(text);
-        for tok in res{
+        for tok in res {
             let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
-            println!("\'{}\'=>{:?} ", src,tok.1);
+            println!("\'{}\'=>{:?} ", src, tok.1);
         }
     }
     {
@@ -111,39 +109,62 @@ fn test_comment(){
         ";
         let res = lex(text);
         println!("Test 2:");
-        for &tok in &res{
+        for &tok in &res {
             let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
-            println!("\'{}\'=>{:?} ", src,tok.1);
+            println!("\'{}\'=>{:?} ", src, tok.1);
         }
         assert_eq!(res.get(1).to_owned().unwrap().1, SyntaxKind::Comment);
         assert_eq!(res.get(3).to_owned().unwrap().1, SyntaxKind::Comment);
     }
 }
-#[test]
-fn test_lex(){
-    let res = lex("123.456e4");
-    println!("{:?}",res);
-    let res = lex("//hello world");
-    println!("{:?}",res);
-    let long_text = r"
-int main(){
-    for(int i=0; i < 5;i=i+1){
-        print(1,2,3);
-        if(i == 4 && !i%4=0){
-            break;
-        }else{//one line comment
-            continue;
-        }/*
-        a
-        b
-        c */
+
+#[cfg(test)]
+mod test {
+    use crate::lex::lex;
+    #[test]
+    fn test_number(){
+        use crate::syntax::SyntaxKind as Kind;
+        let text = "123 456.789 456e3";
+        let res = lex(text);
+        //println!("{:?}", res);
+        for &tok in &res {
+            //let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            //println!("\'{}\'=>{:?} ", src, tok.1);
+        }
+        let token_only: Vec<Kind> = res.into_iter().map(|tok|{
+            tok.1
+        }).collect();
+        assert_eq!(token_only,
+            [Kind::IntConst, Kind::Whitespace, 
+            Kind::FloatConst, Kind::Whitespace, 
+            Kind::FloatConst]);
     }
-}
-    ";
-    let res = lex(long_text);
-    for tok in res{
-        let src = long_text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
-        println!("\'{}\'=>{:?} ", src,tok.1);
+    #[test]
+    fn test_long_text() {
+        let res = lex("123.456e4");
+        println!("{:?}", res);
+        let res = lex("//hello world");
+        println!("{:?}", res);
+        let long_text = r"
+            int main(){
+                for(int i=0; i < 5;i=i+1){
+                    print(1,2,3);
+                    if(i == 4 && !i%4=0){
+                        break;
+                    }else{//one line comment
+                        continue;
+                    }/*
+                    a
+                    b
+                    c */
+                }
+            }
+                ";
+        let res = lex(long_text);
+        for tok in res {
+            let src = long_text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            println!("\'{}\'=>{:?} ", src, tok.1);
+        }
+        //println!("{:?}",res);
     }
-    //println!("{:?}",res);
 }

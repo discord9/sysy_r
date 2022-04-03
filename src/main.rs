@@ -1,4 +1,5 @@
 mod syntax;
+mod test;
 mod lex;
 use syntax::SyntaxKind;
 
