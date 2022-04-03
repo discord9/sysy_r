@@ -56,7 +56,26 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         },
         "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||" | "="   => |lexer| {
             // "!" | "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==" | "!=" | "&&" | "||"
-            lexer.return_(SyntaxKind::Operator)
+            use SyntaxKind as Kind;
+            let ret = match lexer.match_(){
+                "!" => Kind::OpNot,
+                "+" => Kind::OpAdd,
+                "-" => Kind::OpSub,
+                "*" => Kind::OpMul,
+                "/" => Kind::OpDiv,
+                "%" => Kind::OpMod,
+                "<" => Kind::OpLT,
+                ">" => Kind::OpGT,
+                "<=" => Kind::OpNG,
+                ">=" => Kind::OpNL,
+                "==" => Kind::OpEQ,
+                "!=" => Kind::OpNE,
+                "&&" => Kind::OpAnd,
+                "||" => Kind::OpOr,
+                "=" => Kind::OpAsg,
+                _ => Kind::Error
+            };
+            lexer.return_(ret)
         },
         // for literal const
         $dec_float_const = SyntaxKind::FloatConst,
@@ -138,6 +157,10 @@ mod test {
             [Kind::IntConst, Kind::Whitespace, 
             Kind::FloatConst, Kind::Whitespace, 
             Kind::FloatConst]);
+    }
+    #[test]
+    fn test_operator_lex(){
+        
     }
     #[test]
     fn test_long_text() {

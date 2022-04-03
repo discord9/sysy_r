@@ -25,7 +25,22 @@ pub enum SyntaxKind {
     RSquare,   // ]
     // Operator
     // unary op '+' '-' '!', '!' only appear in Cond
-    Operator, // * / % + - < > <= >= == != && ||
+    Operator, // * / % + - < > <= >= == != && || =
+    OpAdd,
+    OpSub,
+    OpNot,
+    OpMul,
+    OpDiv,
+    OpMod,
+    OpLT,
+    OpGT,
+    OpNG,
+    OpNL,
+    OpEQ,
+    OpNE,
+    OpAnd,
+    OpOr,
+    OpAsg,
     // literal const
     IntConst,
     FloatConst,
@@ -289,6 +304,14 @@ impl Parser {
         }
         self.builder.finish_node();
     }
+    /// UnaryExp -> PrimaryExp | Ident `(`[FuncRParams]`)` | UnaryOp UnaryExp
+    fn unary_op(&mut self) {
+        match self.current() {
+            Some(Kind::Ident) => self.bump_expect(Kind::LParen, "Expect `(`."),
+            Some(Kind::Operator) => {}
+            _ => self.primary_exp(),
+        }
+    }
 }
 
 fn parse(text: &str) -> Parse {
@@ -343,14 +366,15 @@ mod tests {
                     "{:?}@{:?} \"{}\"",
                     child.kind(),
                     child.text_range(),
-                    text.get(child.text_range().start().into()..child.text_range().end().into()).unwrap()
+                    text.get(child.text_range().start().into()..child.text_range().end().into())
+                        .unwrap()
                 )
             })
             .collect::<Vec<_>>();
-            for line in &list{
-                println!("  {}", line);
-            }
-            assert_eq!(list, vec!["FloatConst@0..4 \"42.3\"".to_string()]);
+        for line in &list {
+            println!("  {}", line);
+        }
+        assert_eq!(list, vec!["FloatConst@0..4 \"42.3\"".to_string()]);
         //assert_eq!(node.children().count(), 1);
     }
 }
