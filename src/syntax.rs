@@ -148,6 +148,24 @@ pub struct Parser {
     errors: Vec<String>,
 }
 use SyntaxKind as Kind;
+
+/// macro use to quickly gen code for exp0 => exp1 | exp1 op exp0
+macro_rules! ConcatExp {
+    ($cur: ident,$child: ident $( ,$concat_op:tt )*) => {
+        $cur.$child();
+        loop{
+            match $cur.current(){
+                $(
+                Some($concat_op) => {
+                    $cur.bump();
+                    $cur.$child();
+                },
+                )*
+                _ => break
+            }
+        };
+    }
+}
 impl Parser {
     fn new(mut tokens: Vec<(SyntaxKind, String)>) -> Self {
         tokens.reverse();
@@ -257,7 +275,7 @@ impl Parser {
 
     /// Expression -> AddExp
     fn exp(&mut self) {
-        unimplemented!()
+        self.add_exp()
     }
     /// LVal -> Ident { `[` Exp `]` }
     fn left_value(&mut self) {
@@ -305,12 +323,115 @@ impl Parser {
         self.builder.finish_node();
     }
     /// UnaryExp -> PrimaryExp | Ident `(`[FuncRParams]`)` | UnaryOp UnaryExp
-    fn unary_op(&mut self) {
+    fn unary_exp(&mut self) {
+        self.builder.start_node(Kind::UnaryExp.into());
         match self.current() {
-            Some(Kind::Ident) => self.bump_expect(Kind::LParen, "Expect `(`."),
-            Some(Kind::Operator) => {}
+            Some(Kind::Ident) => {
+                self.bump_expect(Kind::Ident, "Expect identifier.");
+                self.bump_expect(Kind::LParen, "Expect `(`.");
+                self.func_real_params();
+                self.bump_expect(Kind::RParen, "Expect `)`.");
+            },
+            Some(Kind::OpAdd) | Some(Kind::OpSub) | Some(Kind::OpNot) => {
+                self.bump();
+                self.unary_exp();
+            }
             _ => self.primary_exp(),
         }
+        self.builder.finish_node();
+    }
+    /// FuncRParams -> Exp {`,` Exp}
+    fn func_real_params(&mut self){
+        self.builder.start_node(Kind::FuncRParams.into());
+        self.exp();
+        loop{
+            match self.current(){
+                Some(Kind::Comma)=>{
+                    self.bump();
+                    self.exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
+    }
+
+    /// MulExp -> UnaryExp | UnaryExp (`*`|`/`|`%`) MulExp
+    fn mul_exp(&mut self){
+        self.builder.start_node(Kind::MulExp.into());
+        ConcatExp!(self, unary_exp, (Kind::OpMul), (Kind::OpDiv), (Kind::OpMod));
+        self.unary_exp();
+        let _r = Some((Kind::OpMul));
+        loop{
+            match self.current(){
+                Some(Kind::OpMul) | Some(Kind::OpDiv) | Some(Kind::OpMod) => {
+                    self.bump();
+                    self.unary_exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
+    }
+    /// AddExp -> MulExp | MulExp (`+`|`-`) AddExp
+    fn add_exp(&mut self){
+        self.builder.start_node(Kind::AddExp.into());
+        self.mul_exp();
+        loop{
+            match self.current(){
+                Some(Kind::OpAdd) | Some(Kind::OpSub) => {
+                    self.bump();
+                    self.mul_exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
+    }
+    /// RelExp -> AddExp | RelExp (`<`|`>`|`<=`|`>=`)AddExp
+    fn rel_exp(&mut self){
+        self.builder.start_node(Kind::RelationExp.into());
+        self.add_exp();
+        loop{
+            match self.current(){
+                Some(Kind::OpLT) | Some(Kind::OpGT) | Some(Kind::OpNG) | Some(Kind::OpNL) => {
+                    self.bump();
+                    self.add_exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
+    }
+    /// EqExp -> RelExp | EqExp(`==`|`!=`)RelExp
+    fn eq_exp(&mut self){
+        self.builder.start_node(Kind::EqExp.into());
+        self.rel_exp();
+        loop{
+            match self.current(){
+                Some(Kind::OpLT) | Some(Kind::OpGT) | Some(Kind::OpNG) | Some(Kind::OpNL) => {
+                    self.bump();
+                    self.rel_exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
+    }
+    /// LogicAndExp -> EqExp | LogicAndExp `&&`EqExp
+    fn logic_and_exp(&mut self){
+        self.builder.start_node(Kind::LogicAndExp.into());
+        self.eq_exp();
+        loop{
+            match self.current(){
+                Some(Kind::OpAnd) => {
+                    self.bump();
+                    self.eq_exp();
+                },
+                _ => break
+            }
+        }
+        self.builder.finish_node();
     }
 }
 

@@ -160,7 +160,12 @@ mod test {
     }
     #[test]
     fn test_operator_lex(){
-        
+        let text = "* / % + - < > <= >= == != && || =";
+        let res = lex(text);
+        for tok in res {
+            let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            println!("\'{}\'=>{:?} ", src, tok.1);
+        }
     }
     #[test]
     fn test_long_text() {
