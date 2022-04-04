@@ -150,17 +150,21 @@ pub struct Parser {
 use SyntaxKind as Kind;
 
 /// macro use to quickly gen code for exp0 => exp1 | exp1 op exp0
+/// `cur` is self
+/// 
+/// `child` calling method for exp1
+/// 
+/// multiple concat_op for pattern match
 macro_rules! ConcatExp {
-    ($cur: ident,$child: ident $( ,$concat_op:tt )*) => {
+    ($cur: ident,$child: ident ,$($concat_op:pat ),*) => {
         $cur.$child();
         loop{
             match $cur.current(){
                 $(
-                Some($concat_op) => {
+                Some($concat_op))|* => {
                     $cur.bump();
                     $cur.$child();
                 },
-                )*
                 _ => break
             }
         };
@@ -343,94 +347,44 @@ impl Parser {
     /// FuncRParams -> Exp {`,` Exp}
     fn func_real_params(&mut self){
         self.builder.start_node(Kind::FuncRParams.into());
-        self.exp();
-        loop{
-            match self.current(){
-                Some(Kind::Comma)=>{
-                    self.bump();
-                    self.exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, exp, Kind::Comma);
         self.builder.finish_node();
     }
 
     /// MulExp -> UnaryExp | UnaryExp (`*`|`/`|`%`) MulExp
     fn mul_exp(&mut self){
         self.builder.start_node(Kind::MulExp.into());
-        ConcatExp!(self, unary_exp, (Kind::OpMul), (Kind::OpDiv), (Kind::OpMod));
-        self.unary_exp();
-        let _r = Some((Kind::OpMul));
-        loop{
-            match self.current(){
-                Some(Kind::OpMul) | Some(Kind::OpDiv) | Some(Kind::OpMod) => {
-                    self.bump();
-                    self.unary_exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, unary_exp, Kind::OpMul, Kind::OpDiv, Kind::OpMod);
         self.builder.finish_node();
     }
     /// AddExp -> MulExp | MulExp (`+`|`-`) AddExp
     fn add_exp(&mut self){
         self.builder.start_node(Kind::AddExp.into());
-        self.mul_exp();
-        loop{
-            match self.current(){
-                Some(Kind::OpAdd) | Some(Kind::OpSub) => {
-                    self.bump();
-                    self.mul_exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, mul_exp, Kind::OpAdd, Kind::OpSub);
         self.builder.finish_node();
     }
     /// RelExp -> AddExp | RelExp (`<`|`>`|`<=`|`>=`)AddExp
     fn rel_exp(&mut self){
         self.builder.start_node(Kind::RelationExp.into());
-        self.add_exp();
-        loop{
-            match self.current(){
-                Some(Kind::OpLT) | Some(Kind::OpGT) | Some(Kind::OpNG) | Some(Kind::OpNL) => {
-                    self.bump();
-                    self.add_exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, add_exp, Kind::OpLT, Kind::OpGT,Kind::OpNG,Kind::OpNL);
         self.builder.finish_node();
     }
     /// EqExp -> RelExp | EqExp(`==`|`!=`)RelExp
     fn eq_exp(&mut self){
         self.builder.start_node(Kind::EqExp.into());
-        self.rel_exp();
-        loop{
-            match self.current(){
-                Some(Kind::OpLT) | Some(Kind::OpGT) | Some(Kind::OpNG) | Some(Kind::OpNL) => {
-                    self.bump();
-                    self.rel_exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, rel_exp, Kind::OpEQ, Kind::OpNE);
         self.builder.finish_node();
     }
     /// LogicAndExp -> EqExp | LogicAndExp `&&`EqExp
     fn logic_and_exp(&mut self){
         self.builder.start_node(Kind::LogicAndExp.into());
-        self.eq_exp();
-        loop{
-            match self.current(){
-                Some(Kind::OpAnd) => {
-                    self.bump();
-                    self.eq_exp();
-                },
-                _ => break
-            }
-        }
+        ConcatExp!(self, eq_exp, Kind::OpAnd);
+        self.builder.finish_node();
+    }
+    // LogicOrExp -> LAndExp | LOrExp `||` LAndExp
+    fn logic_or_exp(&mut self){
+        self.builder.start_node(Kind::LogicAndExp.into());
+        ConcatExp!(self, logic_and_exp, Kind::OpOr);
         self.builder.finish_node();
     }
 }
