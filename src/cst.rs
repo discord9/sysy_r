@@ -318,6 +318,38 @@ mod tests {
             .collect();
         tokens
     }
+    /// output cst into a string
+    fn output_cst(node: &SyntaxNode, depth: usize,text: &str,output: &mut String){
+        let tab = "    ";
+        let child_spaces:String = (0.. depth+1).map(|_|{
+            tab
+        }).collect();
+        let spaces: String = (0.. depth).map(|_|{
+            tab
+        }).collect();
+        let dis_node = format!("{}{:?}\n", spaces, node);
+        output.push_str(&dis_node);
+        //print!("{}",dis_node);
+        let _ = node.children_with_tokens().map(|child|{
+            match child{
+                SyntaxElement::Node(node)=>{
+                    output_cst(&node, depth+1, text, output);
+                },
+                SyntaxElement::Token(token)=>{
+                    let res = format!(
+                        "{}{:?}@{:?} \"{}\"\n",
+                        child_spaces,
+                        token.kind(),
+                        token.text_range(),
+                        text.get(token.text_range().start().into()..token.text_range().end().into())
+                            .unwrap()
+                    );
+                    //print!("{}", res);
+                    output.push_str(&res);
+                },
+            }
+        }).count();
+    }
     fn print_cst(node: &SyntaxNode, depth: usize,text: &str){
         //let node = tree.syntax();
         let child_spaces:String = (0.. depth+1).map(|_|{
@@ -347,16 +379,48 @@ mod tests {
     #[test]
     fn test_exp() {
         {
-            // test primary exp
+            println!("Test 1");
+            // test LeftValue-> Ident
             let text = "abc123";
             let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
             println!("Tokens: {:?}", tokens);
             let mut parser = Parser::new(tokens);
-            parser.number();
+            parser.left_value();
             let res = Parse {
                 green_node: parser.builder.finish(),
                 errors: parser.errors,
             };
+            let node = res.syntax();
+            let mut res = String::new();
+            output_cst(&node, 0, text, &mut res);
+            print!("{}", res);
+            assert_eq!(
+r#"LeftValue@0..6
+    Ident@0..6 "abc123"
+"#,res);
+        }
+        {
+            println!("Test 2");
+            // test PrimaryExp -> LVal|Number
+            let text = "abc123";
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+            println!("Tokens: {:?}", tokens);
+            let mut parser = Parser::new(tokens);
+            parser.primary_exp();
+            let res = Parse {
+                green_node: parser.builder.finish(),
+                errors: parser.errors,
+            };
+            let node = res.syntax();
+            let mut res = String::new();
+            output_cst(&node, 0, text, &mut res);
+            print!("CST:{}\nCST END", res);
+            
+            assert_eq!(
+r#"PrimaryExp@0..6
+    LeftValue@0..6
+        Ident@0..6 "abc123"
+"#,res);
         }
     }
     #[test]
