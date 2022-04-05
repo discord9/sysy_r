@@ -1,6 +1,5 @@
 //! Concrete Synatx Tree
-use crate::syntax::{SyntaxKind, Lang};
-
+use crate::syntax::{Lang, SyntaxKind};
 
 use rowan::GreenNode;
 
@@ -43,9 +42,9 @@ use SyntaxKind as Kind;
 
 /// macro use to quickly gen code for exp0 => exp1 | exp1 op exp0
 /// `cur` is self
-/// 
+///
 /// `child` calling method for exp1
-/// 
+///
 /// multiple concat_op for pattern match
 macro_rules! ConcatExp {
     ($cur: ident,$child: ident ,$($concat_op:pat ),*) => {
@@ -124,6 +123,9 @@ impl Parser {
                     self.const_decl();
                     unimplemented!()
                 }
+                Some(Kind::BType) => {
+                    unimplemented!()
+                }
                 _ => break,
             }
         }
@@ -178,17 +180,12 @@ impl Parser {
         self.builder.start_node(Kind::LeftValue.into());
         if let Some(Kind::Ident) = self.current() {
             self.bump();
-            loop {
-                if let Some(Kind::LSquare) = self.current() {
-                    self.bump();
-                    self.exp();
-                    self.bump_expect(Kind::RSquare, "Expect `]`");
-                } else {
-                    break;
-                }
+            while let Some(Kind::LSquare) = self.current() {
+                self.bump();
+                self.exp();
+                self.bump_expect(Kind::RSquare, "Expect `]`");
             }
         }
-
         self.builder.finish_node();
     }
     /// PrimaryExp -> `(` Exp `)` | LVal | Number
@@ -227,7 +224,7 @@ impl Parser {
                 self.bump_expect(Kind::LParen, "Expect `(`.");
                 self.func_real_params();
                 self.bump_expect(Kind::RParen, "Expect `)`.");
-            },
+            }
             Some(Kind::OpAdd) | Some(Kind::OpSub) | Some(Kind::OpNot) => {
                 self.bump();
                 self.unary_exp();
@@ -237,44 +234,51 @@ impl Parser {
         self.builder.finish_node();
     }
     /// FuncRParams -> Exp {`,` Exp}
-    fn func_real_params(&mut self){
+    fn func_real_params(&mut self) {
         self.builder.start_node(Kind::FuncRParams.into());
         ConcatExp!(self, exp, Kind::Comma);
         self.builder.finish_node();
     }
 
     /// MulExp -> UnaryExp | UnaryExp (`*`|`/`|`%`) MulExp
-    fn mul_exp(&mut self){
+    fn mul_exp(&mut self) {
         self.builder.start_node(Kind::MulExp.into());
         ConcatExp!(self, unary_exp, Kind::OpMul, Kind::OpDiv, Kind::OpMod);
         self.builder.finish_node();
     }
     /// AddExp -> MulExp | MulExp (`+`|`-`) AddExp
-    fn add_exp(&mut self){
+    fn add_exp(&mut self) {
         self.builder.start_node(Kind::AddExp.into());
         ConcatExp!(self, mul_exp, Kind::OpAdd, Kind::OpSub);
         self.builder.finish_node();
     }
     /// RelExp -> AddExp | RelExp (`<`|`>`|`<=`|`>=`)AddExp
-    fn rel_exp(&mut self){
+    fn rel_exp(&mut self) {
         self.builder.start_node(Kind::RelationExp.into());
-        ConcatExp!(self, add_exp, Kind::OpLT, Kind::OpGT,Kind::OpNG,Kind::OpNL);
+        ConcatExp!(
+            self,
+            add_exp,
+            Kind::OpLT,
+            Kind::OpGT,
+            Kind::OpNG,
+            Kind::OpNL
+        );
         self.builder.finish_node();
     }
     /// EqExp -> RelExp | EqExp(`==`|`!=`)RelExp
-    fn eq_exp(&mut self){
+    fn eq_exp(&mut self) {
         self.builder.start_node(Kind::EqExp.into());
         ConcatExp!(self, rel_exp, Kind::OpEQ, Kind::OpNE);
         self.builder.finish_node();
     }
     /// LogicAndExp -> EqExp | LogicAndExp `&&`EqExp
-    fn logic_and_exp(&mut self){
+    fn logic_and_exp(&mut self) {
         self.builder.start_node(Kind::LogicAndExp.into());
         ConcatExp!(self, eq_exp, Kind::OpAnd);
         self.builder.finish_node();
     }
     // LogicOrExp -> LAndExp | LOrExp `||` LAndExp
-    fn logic_or_exp(&mut self){
+    fn logic_or_exp(&mut self) {
         self.builder.start_node(Kind::LogicAndExp.into());
         ConcatExp!(self, logic_and_exp, Kind::OpOr);
         self.builder.finish_node();
@@ -299,10 +303,14 @@ pub fn parse(text: &str) -> Parse {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn test_exp() {
+        {}
+    }
+    #[test]
     fn test_number() {
+        use super::{Parse, Parser};
         use crate::lex::lex;
         use crate::syntax::SyntaxKind as Kind;
-        use super::{Parse, Parser};
         let text = r"42.3";
         let tokens: Vec<(Kind, String)> = lex(text)
             .into_iter()
