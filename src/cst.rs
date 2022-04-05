@@ -400,7 +400,7 @@ mod tests {
     /// standard operation producure for test parser
     ///
     /// take input `text` and a top-down parse function `f`
-    fn test_sop<F>(text: &str, f: F) -> String
+    fn test_sop<F>(text: &str, f: F, tab: &str) -> String
     where
         F: Fn(&mut Parser),
     {
@@ -417,7 +417,7 @@ mod tests {
             println!("{:?}", res.errors);
         }
         let mut res = String::new();
-        output_cst(&node, 0, text, &mut res, "    ");
+        output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
         res
     }
@@ -427,7 +427,7 @@ mod tests {
             println!("Test 1");
             // test LeftValue-> Ident
             let text = "abc123";
-            let res = test_sop(text, Parser::left_value);
+            let res = test_sop(text, Parser::left_value, "    ");
             assert_eq!(
                 r#"LeftValue@0..6
     Ident@0..6 "abc123"
@@ -440,7 +440,7 @@ mod tests {
             println!("Test 2");
             // test PrimaryExp -> LVal|Number
             let text = "abc123";
-            let res = test_sop(text, Parser::primary_exp);
+            let res = test_sop(text, Parser::primary_exp, "    ");
             assert_eq!(
                 r#"PrimaryExp@0..6
     LeftValue@0..6
@@ -454,7 +454,7 @@ mod tests {
             println!("Test 3");
             // UnaryExp -> PrimaryExp
             let text = "abc123";
-            let res = test_sop(text, Parser::unary_exp);
+            let res = test_sop(text, Parser::unary_exp, "    ");
             assert_eq!(
                 r#"UnaryExp@0..6
     PrimaryExp@0..6
@@ -468,7 +468,7 @@ mod tests {
         {
             println!("Test 4");
             let text = "abc123()";
-            let res = test_sop(text, Parser::unary_exp);
+            let res = test_sop(text, Parser::unary_exp, "    ");
             // UnaryExp ->  Ident (FuncRParams)
             assert_eq!(
                 r#"UnaryExp@0..8
@@ -483,7 +483,7 @@ mod tests {
         {
             println!("Test 5");
             let text = "-+!1";
-            let res = test_sop(text, Parser::unary_exp);
+            let res = test_sop(text, Parser::unary_exp, "    ");
             // UnaryExp ->  UnaryOp UnaryExp
             assert_eq!(
                 r#"
@@ -505,7 +505,7 @@ UnaryExp@0..4
         {
             println!("Test 6");
             let text = "1*2*3";
-            let res = test_sop(text, Parser::mul_exp);
+            let res = test_sop(text, Parser::mul_exp, "    ");
             // UnaryExp ->  UnaryOp UnaryExp
             assert_eq!(
                 r#"
@@ -532,7 +532,84 @@ MulExp@0..5
         {
             println!("Test 7");
             let text = "-1*0+1<2==1<3&&2||3&&4";
-            let res = test_sop(text, Parser::logic_or_exp);
+            let res = test_sop(text, Parser::logic_or_exp, "-");
+            assert_eq!(
+r#"LogicOrExp@0..22
+-LogicAndExp@0..16
+--EqExp@0..13
+---RelationExp@0..8
+----AddExp@0..6
+-----MulExp@0..4
+------UnaryExp@0..2
+-------OpSub@0..1 "-"
+-------UnaryExp@1..2
+--------PrimaryExp@1..2
+---------Number@1..2
+----------IntConst@1..2 "1"
+------OpMul@2..3 "*"
+------UnaryExp@3..4
+-------PrimaryExp@3..4
+--------Number@3..4
+---------IntConst@3..4 "0"
+-----OpAdd@4..5 "+"
+-----MulExp@5..6
+------UnaryExp@5..6
+-------PrimaryExp@5..6
+--------Number@5..6
+---------IntConst@5..6 "1"
+----OpLT@6..7 "<"
+----AddExp@7..8
+-----MulExp@7..8
+------UnaryExp@7..8
+-------PrimaryExp@7..8
+--------Number@7..8
+---------IntConst@7..8 "2"
+---OpEQ@8..10 "=="
+---RelationExp@10..13
+----AddExp@10..11
+-----MulExp@10..11
+------UnaryExp@10..11
+-------PrimaryExp@10..11
+--------Number@10..11
+---------IntConst@10..11 "1"
+----OpLT@11..12 "<"
+----AddExp@12..13
+-----MulExp@12..13
+------UnaryExp@12..13
+-------PrimaryExp@12..13
+--------Number@12..13
+---------IntConst@12..13 "3"
+--OpAnd@13..15 "&&"
+--EqExp@15..16
+---RelationExp@15..16
+----AddExp@15..16
+-----MulExp@15..16
+------UnaryExp@15..16
+-------PrimaryExp@15..16
+--------Number@15..16
+---------IntConst@15..16 "2"
+-OpOr@16..18 "||"
+-LogicAndExp@18..22
+--EqExp@18..19
+---RelationExp@18..19
+----AddExp@18..19
+-----MulExp@18..19
+------UnaryExp@18..19
+-------PrimaryExp@18..19
+--------Number@18..19
+---------IntConst@18..19 "3"
+--OpAnd@19..21 "&&"
+--EqExp@21..22
+---RelationExp@21..22
+----AddExp@21..22
+-----MulExp@21..22
+------UnaryExp@21..22
+-------PrimaryExp@21..22
+--------Number@21..22
+---------IntConst@21..22 "4""#
+                .trim(),
+                res.trim()
+            );
         }
     }
     #[test]
