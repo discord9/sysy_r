@@ -248,7 +248,7 @@ impl Parser {
                 self.bump();
                 self.unary_exp();
             }
-            _ => self.push_err("Expect primary exp or f(..) or unary exp like -1"),
+            _ => self.primary_exp()//self.push_err("Expect primary exp or f(..) or unary exp like -1"),
         }
         self.builder.finish_node();
     }
@@ -413,6 +413,9 @@ mod tests {
             errors: parser.errors,
         };
         let node = res.syntax();
+        if !res.errors.is_empty(){
+            println!("{:?}", res.errors);
+        }
         let mut res = String::new();
         output_cst(&node, 0, text, &mut res, "    ");
         print!("CST:\n{}\n", res);
@@ -437,7 +440,6 @@ mod tests {
             // test PrimaryExp -> LVal|Number
             let text = "abc123";
             let res = test_sop(text, Parser::primary_exp);
-            print!("CST:\n{}\n", res);
             assert_eq!(
                 r#"PrimaryExp@0..6
     LeftValue@0..6
@@ -448,10 +450,9 @@ mod tests {
         }
         {
             println!("Test 3");
-            // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
+            // UnaryExp -> PrimaryExp 
             let text = "abc123";
             let res = test_sop(text, Parser::unary_exp);
-            print!("CST:\n{}\n", res);
             assert_eq!(
                 r#"UnaryExp@0..6
     PrimaryExp@0..6
@@ -465,8 +466,7 @@ mod tests {
             println!("Test 4");
             let text = "abc123()";
             let res = test_sop(text, Parser::unary_exp);
-            // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
-            print!("CST:\n{}\n", res);
+            // UnaryExp ->  Ident (FuncRParams)
             assert_eq!(
                 r#"UnaryExp@0..8
     Ident@0..6 "abc123"
@@ -475,6 +475,12 @@ mod tests {
 "#.trim(),
                 res.trim()
             );
+        }
+        {
+            println!("Test 5");
+            let text = "-+!1";
+            let res = test_sop(text, Parser::unary_exp);
+            // UnaryExp ->  UnaryOp UnaryExp
         }
     }
     #[test]
