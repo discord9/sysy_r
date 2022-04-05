@@ -243,7 +243,7 @@ impl Parser {
                 }
                 self.bump_expect(Kind::RParen, "Expect `)`.");
             }
-            (Some(Kind::Ident), _) => self.primary_exp(),
+            //(Some(Kind::Ident), _) => self.primary_exp(),
             (Some(Kind::OpAdd), _) | (Some(Kind::OpSub), _) | (Some(Kind::OpNot), _) => {
                 self.bump();
                 self.unary_exp();
@@ -431,8 +431,8 @@ mod tests {
             assert_eq!(
                 r#"LeftValue@0..6
     Ident@0..6 "abc123"
-"#,
-                res
+"#.trim(),
+                res.trim()
             );
         }
         {
@@ -444,8 +444,8 @@ mod tests {
                 r#"PrimaryExp@0..6
     LeftValue@0..6
         Ident@0..6 "abc123"
-"#,
-                res
+"#.trim(),
+                res.trim()
             );
         }
         {
@@ -458,8 +458,8 @@ mod tests {
     PrimaryExp@0..6
         LeftValue@0..6
             Ident@0..6 "abc123"
-"#,
-                res
+"#.trim(),
+                res.trim()
             );
         }
         {
@@ -481,6 +481,21 @@ mod tests {
             let text = "-+!1";
             let res = test_sop(text, Parser::unary_exp);
             // UnaryExp ->  UnaryOp UnaryExp
+            assert_eq!(
+                r#"
+UnaryExp@0..4
+    OpSub@0..1 "-"
+    UnaryExp@1..4
+        OpAdd@1..2 "+"
+        UnaryExp@2..4
+            OpNot@2..3 "!"
+            UnaryExp@3..4
+                PrimaryExp@3..4
+                    Number@3..4
+                        IntConst@3..4 "1"
+"#.trim(),
+                res.trim()
+            );
         }
     }
     #[test]
