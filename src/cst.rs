@@ -83,15 +83,23 @@ impl Parser {
     /// bump expected token or push a error node with given error message
     fn bump_expect(&mut self, expected: Kind, err_msg: &str) {
         match self.current() {
-            Some(expected) => self.bump(),
+            Some(out) => {
+                if expected == out {
+                    self.bump()
+                } else {
+                    self.push_err(err_msg);
+                }
+            }
             _ => self.push_err(err_msg),
         }
     }
-    /// Push a error node
+    /// Push a error node(BUG!)
     fn push_err(&mut self, err_msg: &str) {
         self.builder.start_node(SyntaxKind::Error.into());
         self.errors.push(err_msg.to_string());
-        self.bump();
+        if !self.tokens.is_empty(){
+            self.bump();
+        }
         self.builder.finish_node();
     }
     /// Peek at the first unprocessed token
@@ -102,11 +110,12 @@ impl Parser {
     ///
     /// `peek(0) == current()`
     fn peek(&self, ahead: usize) -> Option<SyntaxKind> {
-        if self.tokens.len() < 1 + ahead{return None};
-        if let Some((kind, _)) = self.tokens
-        .get(self.tokens.len() - 1 - ahead){
+        if self.tokens.len() < 1 + ahead {
+            return None;
+        };
+        if let Some((kind, _)) = self.tokens.get(self.tokens.len() - 1 - ahead) {
             Some(*kind)
-        }else{
+        } else {
             None
         }
     }
@@ -224,16 +233,14 @@ impl Parser {
     fn unary_exp(&mut self) {
         self.builder.start_node(Kind::UnaryExp.into());
         match (self.current(), self.peek(1)) {
-            (Some(Kind::Ident),Some(Kind::LParen)) => {
-                        self.bump();// ident 
-                        self.bump_expect(Kind::LParen, "Expect `(`.");
-                        self.func_real_params();
-                        self.bump_expect(Kind::RParen, "Expect `)`.");
-            },
+            (Some(Kind::Ident), Some(Kind::LParen)) => {
+                self.bump(); // ident
+                self.bump_expect(Kind::LParen, "Expect `(`.");
+                self.func_real_params();
+                self.bump_expect(Kind::RParen, "Expect `)`.");
+            }
             (Some(Kind::Ident), _) => self.primary_exp(),
-            (Some(Kind::OpAdd),_) | 
-            (Some(Kind::OpSub),_) | 
-            (Some(Kind::OpNot),_) => {
+            (Some(Kind::OpAdd), _) | (Some(Kind::OpSub), _) | (Some(Kind::OpNot), _) => {
                 self.bump();
                 self.unary_exp();
             }
@@ -310,7 +317,7 @@ pub fn parse(text: &str) -> Parse {
 
 #[cfg(test)]
 mod tests {
-    use super::{Parse, Parser, SyntaxNode, SyntaxElement};
+    use super::{Parse, Parser, SyntaxElement, SyntaxNode};
     use crate::lex::lex;
     use crate::syntax::SyntaxKind as Kind;
     fn lex_into_tokens(text: &str) -> Vec<(Kind, String)> {
@@ -326,64 +333,83 @@ mod tests {
         tokens
     }
     /// output cst into a string.
-    /// 
+    ///
     /// `tab` is spacing for child node
-    fn output_cst(node: &SyntaxNode, depth: usize,text: &str,output: &mut String,tab: &str){
+    fn output_cst(node: &SyntaxNode, depth: usize, text: &str, output: &mut String, tab: &str) {
         //let tab = "    ";
-        let child_spaces:String = (0.. depth+1).map(|_|{
-            tab
-        }).collect();
-        let spaces: String = (0.. depth).map(|_|{
-            tab
-        }).collect();
+        let child_spaces: String = (0..depth + 1).map(|_| tab).collect();
+        let spaces: String = (0..depth).map(|_| tab).collect();
         let dis_node = format!("{}{:?}\n", spaces, node);
         output.push_str(&dis_node);
         //print!("{}",dis_node);
-        let _ = node.children_with_tokens().map(|child|{
-            match child{
-                SyntaxElement::Node(node)=>{
-                    output_cst(&node, depth+1, text, output, tab);
-                },
-                SyntaxElement::Token(token)=>{
-                    let res = format!(
-                        "{}{:?}@{:?} \"{}\"\n",
-                        child_spaces,
-                        token.kind(),
-                        token.text_range(),
-                        text.get(token.text_range().start().into()..token.text_range().end().into())
+        let _ = node
+            .children_with_tokens()
+            .map(|child| {
+                match child {
+                    SyntaxElement::Node(node) => {
+                        output_cst(&node, depth + 1, text, output, tab);
+                    }
+                    SyntaxElement::Token(token) => {
+                        let res = format!(
+                            "{}{:?}@{:?} \"{}\"\n",
+                            child_spaces,
+                            token.kind(),
+                            token.text_range(),
+                            text.get(
+                                token.text_range().start().into()..token.text_range().end().into()
+                            )
                             .unwrap()
-                    );
-                    //print!("{}", res);
-                    output.push_str(&res);
-                },
-            }
-        }).count();
+                        );
+                        //print!("{}", res);
+                        output.push_str(&res);
+                    }
+                }
+            })
+            .count();
     }
-    fn print_cst(node: &SyntaxNode, depth: usize,text: &str){
+    fn print_cst(node: &SyntaxNode, depth: usize, text: &str) {
         //let node = tree.syntax();
-        let child_spaces:String = (0.. depth+1).map(|_|{
-            ' '
-        }).collect();
+        let child_spaces: String = (0..depth + 1).map(|_| ' ').collect();
         let spaces = child_spaces.get(0..depth).unwrap();
         println!("{}{:?}", spaces, node);
-        let _ = node.children_with_tokens().map(|child|{
-            match child{
-                SyntaxElement::Node(node)=>{
-                    print_cst(&node, depth+1, text);
-                },
-                SyntaxElement::Token(token)=>{
+        let _ = node
+            .children_with_tokens()
+            .map(|child| match child {
+                SyntaxElement::Node(node) => {
+                    print_cst(&node, depth + 1, text);
+                }
+                SyntaxElement::Token(token) => {
                     println!(
                         "{}{:?}@{:?} \"{}\"",
                         child_spaces,
                         token.kind(),
                         token.text_range(),
-                        text.get(token.text_range().start().into()..token.text_range().end().into())
-                            .unwrap()
+                        text.get(
+                            token.text_range().start().into()..token.text_range().end().into()
+                        )
+                        .unwrap()
                     )
-                },
-            }
-        }).count();
-        
+                }
+            })
+            .count();
+    }
+    fn test_sop<F>(text: &str, f: F) -> String
+    where
+        F: Fn(&mut Parser),
+    {
+        let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+        println!("Tokens: {:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        f(&mut parser);
+        let res = Parse {
+            green_node: parser.builder.finish(),
+            errors: parser.errors,
+        };
+        let node = res.syntax();
+        let mut res = String::new();
+        output_cst(&node, 0, text, &mut res, "    ");
+        print!("CST:\n{}\n", res);
+        res
     }
     #[test]
     fn test_exp() {
@@ -391,22 +417,13 @@ mod tests {
             println!("Test 1");
             // test LeftValue-> Ident
             let text = "abc123";
-            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-            println!("Tokens: {:?}", tokens);
-            let mut parser = Parser::new(tokens);
-            parser.left_value();
-            let res = Parse {
-                green_node: parser.builder.finish(),
-                errors: parser.errors,
-            };
-            let node = res.syntax();
-            let mut res = String::new();
-            output_cst(&node, 0, text, &mut res, "    ");
-            print!("CST:\n{}\n", res);
+            let res = test_sop(text, Parser::left_value);
             assert_eq!(
-r#"LeftValue@0..6
+                r#"LeftValue@0..6
     Ident@0..6 "abc123"
-"#,res);
+"#,
+                res
+            );
         }
         {
             println!("Test 2");
@@ -424,12 +441,14 @@ r#"LeftValue@0..6
             let mut res = String::new();
             output_cst(&node, 0, text, &mut res, "    ");
             print!("CST:\n{}\n", res);
-            
+
             assert_eq!(
-r#"PrimaryExp@0..6
+                r#"PrimaryExp@0..6
     LeftValue@0..6
         Ident@0..6 "abc123"
-"#,res);
+"#,
+                res
+            );
         }
         {
             println!("Test 3");
@@ -448,11 +467,20 @@ r#"PrimaryExp@0..6
             output_cst(&node, 0, text, &mut res, "    ");
             print!("CST:\n{}\n", res);
             assert_eq!(
-r#"UnaryExp@0..6
+                r#"UnaryExp@0..6
     PrimaryExp@0..6
         LeftValue@0..6
             Ident@0..6 "abc123"
-"#,res);
+"#,
+                res
+            );
+        }
+        {
+            println!("Test 4");
+            let text = "abc123()";
+            let res = test_sop(text, Parser::unary_exp);
+            // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
+            print!("CST:\n{}\n", res);
         }
     }
     #[test]
@@ -461,21 +489,21 @@ r#"UnaryExp@0..6
         use crate::lex::lex;
         use crate::syntax::SyntaxKind as Kind;
         let text = r"42.3";
-            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-            println!("Tokens: {:?}", tokens);
-            let mut parser = Parser::new(tokens);
-            parser.number();
-            let res = Parse {
-                green_node: parser.builder.finish(),
-                errors: parser.errors,
-            };
-            let node = res.syntax();
-            let mut res = String::new();
-            output_cst(&node, 0, text, &mut res, "    ");
-            print!("CST:\n{}\n", res);
+        let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+        println!("Tokens: {:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        parser.number();
+        let res = Parse {
+            green_node: parser.builder.finish(),
+            errors: parser.errors,
+        };
+        let node = res.syntax();
+        let mut res = String::new();
+        output_cst(&node, 0, text, &mut res, "    ");
+        print!("CST:\n{}\n", res);
         assert_eq!(
             res,
-r#"Number@0..4
+            r#"Number@0..4
     FloatConst@0..4 "42.3"
 "#, // root node, spanning 4 bytes
         );
