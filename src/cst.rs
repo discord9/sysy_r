@@ -397,6 +397,9 @@ mod tests {
             })
             .count();
     }
+    /// standard operation producure for test parser
+    /// 
+    /// take input `text` and a top-down parse function `f`
     fn test_sop<F>(text: &str, f: F) -> String
     where
         F: Fn(&mut Parser),
@@ -447,17 +450,7 @@ mod tests {
             println!("Test 3");
             // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
             let text = "abc123";
-            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-            println!("Tokens: {:?}", tokens);
-            let mut parser = Parser::new(tokens);
-            parser.unary_exp();
-            let res = Parse {
-                green_node: parser.builder.finish(),
-                errors: parser.errors,
-            };
-            let node = res.syntax();
-            let mut res = String::new();
-            output_cst(&node, 0, text, &mut res, "    ");
+            let res = test_sop(text, Parser::unary_exp);
             print!("CST:\n{}\n", res);
             assert_eq!(
                 r#"UnaryExp@0..6
@@ -474,6 +467,14 @@ mod tests {
             let res = test_sop(text, Parser::unary_exp);
             // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
             print!("CST:\n{}\n", res);
+            assert_eq!(
+                r#"UnaryExp@0..8
+    Ident@0..6 "abc123"
+    LParen@6..7 "("
+    RParen@7..8 ")"
+"#.trim(),
+                res.trim()
+            );
         }
     }
     #[test]
