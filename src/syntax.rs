@@ -114,7 +114,7 @@ use rowan::GreenNode;
 
 use rowan::GreenNodeBuilder;
 
-struct Parse {
+pub struct Parse {
     green_node: GreenNode,
     #[allow(unused)]
     errors: Vec<String>,
@@ -389,7 +389,7 @@ impl Parser {
     }
 }
 
-fn parse(text: &str) -> Parse {
+pub fn parse(text: &str) -> Parse {
     use crate::lex::lex;
     let text = r"hello=world";
     let tokens: Vec<(SyntaxKind, String)> = lex(text)

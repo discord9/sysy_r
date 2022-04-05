@@ -1,6 +1,7 @@
 mod syntax;
 mod test;
 mod lex;
+mod cst;
 use syntax::SyntaxKind;
 
 
