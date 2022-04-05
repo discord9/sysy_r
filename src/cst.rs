@@ -24,6 +24,7 @@ type SyntaxToken = rowan::SyntaxToken<Lang>;
 type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 impl Parse {
+    /// view from SyntaxNode root
     fn syntax(&self) -> SyntaxNode {
         SyntaxNode::new_root(self.green_node.clone())
     }
@@ -302,9 +303,61 @@ pub fn parse(text: &str) -> Parse {
 
 #[cfg(test)]
 mod tests {
+    use super::{Parse, Parser, SyntaxNode, SyntaxElement};
+    use crate::lex::lex;
+    use crate::syntax::SyntaxKind as Kind;
+    fn lex_into_tokens(text: &str) -> Vec<(Kind, String)> {
+        let tokens: Vec<(Kind, String)> = lex(text)
+            .into_iter()
+            .map(|tok| {
+                (
+                    tok.1,
+                    text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap().to_owned(),
+                )
+            })
+            .collect();
+        tokens
+    }
+    fn print_cst(node: &SyntaxNode, depth: usize,text: &str){
+        //let node = tree.syntax();
+        let child_spaces:String = (0.. depth+1).map(|_|{
+            ' '
+        }).collect();
+        let spaces = child_spaces.get(0..depth).unwrap();
+        println!("{}{:?}", spaces, node);
+        let _ = node.children_with_tokens().map(|child|{
+            match child{
+                SyntaxElement::Node(node)=>{
+                    print_cst(&node, depth+1, text);
+                },
+                SyntaxElement::Token(token)=>{
+                    println!(
+                        "{}{:?}@{:?} \"{}\"",
+                        child_spaces,
+                        token.kind(),
+                        token.text_range(),
+                        text.get(token.text_range().start().into()..token.text_range().end().into())
+                            .unwrap()
+                    )
+                },
+            }
+        }).count();
+        
+    }
     #[test]
     fn test_exp() {
-        {}
+        {
+            // test primary exp
+            let text = "abc123";
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+            println!("Tokens: {:?}", tokens);
+            let mut parser = Parser::new(tokens);
+            parser.number();
+            let res = Parse {
+                green_node: parser.builder.finish(),
+                errors: parser.errors,
+            };
+        }
     }
     #[test]
     fn test_number() {
@@ -329,10 +382,11 @@ mod tests {
             errors: parser.errors,
         };
         let node = res.syntax();
+        print_cst(&node, 0, text);
         println!("{:?}", node);
         assert_eq!(
             format!("{:?}", node),
-            "Number@0..4", // root node, spanning 15 bytes
+            "Number@0..4", // root node, spanning 4 bytes
         );
         //println!("{:?}", node.children_with_tokens());
         let list = node
