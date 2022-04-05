@@ -97,7 +97,7 @@ impl Parser {
     fn push_err(&mut self, err_msg: &str) {
         self.builder.start_node(SyntaxKind::Error.into());
         self.errors.push(err_msg.to_string());
-        if !self.tokens.is_empty(){
+        if !self.tokens.is_empty() {
             self.bump();
         }
         self.builder.finish_node();
@@ -238,7 +238,7 @@ impl Parser {
             (Some(Kind::Ident), Some(Kind::LParen)) => {
                 self.bump(); // ident
                 self.bump_expect(Kind::LParen, "Expect `(`.");
-                if self.current()!=Some(Kind::RParen){
+                if self.current() != Some(Kind::RParen) {
                     self.func_real_params();
                 }
                 self.bump_expect(Kind::RParen, "Expect `)`.");
@@ -248,7 +248,7 @@ impl Parser {
                 self.bump();
                 self.unary_exp();
             }
-            _ => self.primary_exp()//self.push_err("Expect primary exp or f(..) or unary exp like -1"),
+            _ => self.primary_exp(), //self.push_err("Expect primary exp or f(..) or unary exp like -1"),
         }
         self.builder.finish_node();
     }
@@ -298,7 +298,7 @@ impl Parser {
     }
     // LogicOrExp -> LAndExp | LOrExp `||` LAndExp
     fn logic_or_exp(&mut self) {
-        self.builder.start_node(Kind::LogicAndExp.into());
+        self.builder.start_node(Kind::LogicOrExp.into());
         ConcatExp!(self, logic_and_exp, Kind::OpOr);
         self.builder.finish_node();
     }
@@ -398,7 +398,7 @@ mod tests {
             .count();
     }
     /// standard operation producure for test parser
-    /// 
+    ///
     /// take input `text` and a top-down parse function `f`
     fn test_sop<F>(text: &str, f: F) -> String
     where
@@ -413,7 +413,7 @@ mod tests {
             errors: parser.errors,
         };
         let node = res.syntax();
-        if !res.errors.is_empty(){
+        if !res.errors.is_empty() {
             println!("{:?}", res.errors);
         }
         let mut res = String::new();
@@ -431,7 +431,8 @@ mod tests {
             assert_eq!(
                 r#"LeftValue@0..6
     Ident@0..6 "abc123"
-"#.trim(),
+"#
+                .trim(),
                 res.trim()
             );
         }
@@ -444,13 +445,14 @@ mod tests {
                 r#"PrimaryExp@0..6
     LeftValue@0..6
         Ident@0..6 "abc123"
-"#.trim(),
+"#
+                .trim(),
                 res.trim()
             );
         }
         {
             println!("Test 3");
-            // UnaryExp -> PrimaryExp 
+            // UnaryExp -> PrimaryExp
             let text = "abc123";
             let res = test_sop(text, Parser::unary_exp);
             assert_eq!(
@@ -458,7 +460,8 @@ mod tests {
     PrimaryExp@0..6
         LeftValue@0..6
             Ident@0..6 "abc123"
-"#.trim(),
+"#
+                .trim(),
                 res.trim()
             );
         }
@@ -472,7 +475,8 @@ mod tests {
     Ident@0..6 "abc123"
     LParen@6..7 "("
     RParen@7..8 ")"
-"#.trim(),
+"#
+                .trim(),
                 res.trim()
             );
         }
@@ -493,9 +497,42 @@ UnaryExp@0..4
                 PrimaryExp@3..4
                     Number@3..4
                         IntConst@3..4 "1"
-"#.trim(),
+"#
+                .trim(),
                 res.trim()
             );
+        }
+        {
+            println!("Test 6");
+            let text = "1*2*3";
+            let res = test_sop(text, Parser::mul_exp);
+            // UnaryExp ->  UnaryOp UnaryExp
+            assert_eq!(
+                r#"
+MulExp@0..5
+    UnaryExp@0..1
+        PrimaryExp@0..1
+            Number@0..1
+                IntConst@0..1 "1"
+    OpMul@1..2 "*"
+    UnaryExp@2..3
+        PrimaryExp@2..3
+            Number@2..3
+                IntConst@2..3 "2"
+    OpMul@3..4 "*"
+    UnaryExp@4..5
+        PrimaryExp@4..5
+            Number@4..5
+                IntConst@4..5 "3"
+"#
+                .trim(),
+                res.trim()
+            );
+        }
+        {
+            println!("Test 7");
+            let text = "-1*0+1<2==1<3&&2||3&&4";
+            let res = test_sop(text, Parser::logic_or_exp);
         }
     }
     #[test]
