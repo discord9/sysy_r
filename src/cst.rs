@@ -102,9 +102,13 @@ impl Parser {
     ///
     /// `peek(0) == current()`
     fn peek(&self, ahead: usize) -> Option<SyntaxKind> {
-        self.tokens
-            .get(self.tokens.len() - 1 - ahead)
-            .map(|(kind, _)| *kind)
+        if self.tokens.len() < 1 + ahead{return None};
+        if let Some((kind, _)) = self.tokens
+        .get(self.tokens.len() - 1 - ahead){
+            Some(*kind)
+        }else{
+            None
+        }
     }
     /// skip whitespace and comment
     fn skip_ws_cmt(&mut self) {
@@ -216,21 +220,24 @@ impl Parser {
         }
         self.builder.finish_node();
     }
-    /// UnaryExp -> PrimaryExp | Ident `(`[FuncRParams]`)` | UnaryOp UnaryExp
+    /// UnaryExp -> PrimaryExp | Ident `(`\[ FuncRParams \]`)` | UnaryOp UnaryExp
     fn unary_exp(&mut self) {
         self.builder.start_node(Kind::UnaryExp.into());
-        match self.current() {
-            Some(Kind::Ident) => {
-                self.bump_expect(Kind::Ident, "Expect identifier.");
-                self.bump_expect(Kind::LParen, "Expect `(`.");
-                self.func_real_params();
-                self.bump_expect(Kind::RParen, "Expect `)`.");
-            }
-            Some(Kind::OpAdd) | Some(Kind::OpSub) | Some(Kind::OpNot) => {
+        match (self.current(), self.peek(1)) {
+            (Some(Kind::Ident),Some(Kind::LParen)) => {
+                        self.bump();// ident 
+                        self.bump_expect(Kind::LParen, "Expect `(`.");
+                        self.func_real_params();
+                        self.bump_expect(Kind::RParen, "Expect `)`.");
+            },
+            (Some(Kind::Ident), _) => self.primary_exp(),
+            (Some(Kind::OpAdd),_) | 
+            (Some(Kind::OpSub),_) | 
+            (Some(Kind::OpNot),_) => {
                 self.bump();
                 self.unary_exp();
             }
-            _ => self.primary_exp(),
+            _ => self.push_err("Expect primary exp or f(..) or unary exp like -1"),
         }
         self.builder.finish_node();
     }
@@ -318,9 +325,11 @@ mod tests {
             .collect();
         tokens
     }
-    /// output cst into a string
-    fn output_cst(node: &SyntaxNode, depth: usize,text: &str,output: &mut String){
-        let tab = "    ";
+    /// output cst into a string.
+    /// 
+    /// `tab` is spacing for child node
+    fn output_cst(node: &SyntaxNode, depth: usize,text: &str,output: &mut String,tab: &str){
+        //let tab = "    ";
         let child_spaces:String = (0.. depth+1).map(|_|{
             tab
         }).collect();
@@ -333,7 +342,7 @@ mod tests {
         let _ = node.children_with_tokens().map(|child|{
             match child{
                 SyntaxElement::Node(node)=>{
-                    output_cst(&node, depth+1, text, output);
+                    output_cst(&node, depth+1, text, output, tab);
                 },
                 SyntaxElement::Token(token)=>{
                     let res = format!(
@@ -392,8 +401,8 @@ mod tests {
             };
             let node = res.syntax();
             let mut res = String::new();
-            output_cst(&node, 0, text, &mut res);
-            print!("{}", res);
+            output_cst(&node, 0, text, &mut res, "    ");
+            print!("CST:\n{}\n", res);
             assert_eq!(
 r#"LeftValue@0..6
     Ident@0..6 "abc123"
@@ -413,13 +422,36 @@ r#"LeftValue@0..6
             };
             let node = res.syntax();
             let mut res = String::new();
-            output_cst(&node, 0, text, &mut res);
-            print!("CST:{}\nCST END", res);
+            output_cst(&node, 0, text, &mut res, "    ");
+            print!("CST:\n{}\n", res);
             
             assert_eq!(
 r#"PrimaryExp@0..6
     LeftValue@0..6
         Ident@0..6 "abc123"
+"#,res);
+        }
+        {
+            println!("Test 3");
+            // UnaryExp -> PrimaryExp | Ident (FuncRParams) | UnaryOp UnaryExp
+            let text = "abc123";
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+            println!("Tokens: {:?}", tokens);
+            let mut parser = Parser::new(tokens);
+            parser.unary_exp();
+            let res = Parse {
+                green_node: parser.builder.finish(),
+                errors: parser.errors,
+            };
+            let node = res.syntax();
+            let mut res = String::new();
+            output_cst(&node, 0, text, &mut res, "    ");
+            print!("CST:\n{}\n", res);
+            assert_eq!(
+r#"UnaryExp@0..6
+    PrimaryExp@0..6
+        LeftValue@0..6
+            Ident@0..6 "abc123"
 "#,res);
         }
     }
@@ -429,46 +461,24 @@ r#"PrimaryExp@0..6
         use crate::lex::lex;
         use crate::syntax::SyntaxKind as Kind;
         let text = r"42.3";
-        let tokens: Vec<(Kind, String)> = lex(text)
-            .into_iter()
-            .map(|tok| {
-                (
-                    tok.1,
-                    text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap().to_owned(),
-                )
-            })
-            .collect();
-        println!("Tokens: {:?}", tokens);
-        let mut parser = Parser::new(tokens);
-        parser.number();
-        let res = Parse {
-            green_node: parser.builder.finish(),
-            errors: parser.errors,
-        };
-        let node = res.syntax();
-        print_cst(&node, 0, text);
-        println!("{:?}", node);
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+            println!("Tokens: {:?}", tokens);
+            let mut parser = Parser::new(tokens);
+            parser.number();
+            let res = Parse {
+                green_node: parser.builder.finish(),
+                errors: parser.errors,
+            };
+            let node = res.syntax();
+            let mut res = String::new();
+            output_cst(&node, 0, text, &mut res, "    ");
+            print!("CST:\n{}\n", res);
         assert_eq!(
-            format!("{:?}", node),
-            "Number@0..4", // root node, spanning 4 bytes
+            res,
+r#"Number@0..4
+    FloatConst@0..4 "42.3"
+"#, // root node, spanning 4 bytes
         );
-        //println!("{:?}", node.children_with_tokens());
-        let list = node
-            .children_with_tokens()
-            .map(|child| {
-                format!(
-                    "{:?}@{:?} \"{}\"",
-                    child.kind(),
-                    child.text_range(),
-                    text.get(child.text_range().start().into()..child.text_range().end().into())
-                        .unwrap()
-                )
-            })
-            .collect::<Vec<_>>();
-        for line in &list {
-            println!("  {}", line);
-        }
-        assert_eq!(list, vec!["FloatConst@0..4 \"42.3\"".to_string()]);
         //assert_eq!(node.children().count(), 1);
     }
 }
