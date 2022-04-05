@@ -187,7 +187,9 @@ impl Parser {
 
     /// Expression -> AddExp
     fn exp(&mut self) {
-        self.add_exp()
+        self.builder.start_node(Kind::Expression.into());
+        self.add_exp();
+        self.builder.finish_node();
     }
     /// LVal -> Ident { `[` Exp `]` }
     fn left_value(&mut self) {
@@ -236,7 +238,9 @@ impl Parser {
             (Some(Kind::Ident), Some(Kind::LParen)) => {
                 self.bump(); // ident
                 self.bump_expect(Kind::LParen, "Expect `(`.");
-                self.func_real_params();
+                if self.current()!=Some(Kind::RParen){
+                    self.func_real_params();
+                }
                 self.bump_expect(Kind::RParen, "Expect `)`.");
             }
             (Some(Kind::Ident), _) => self.primary_exp(),
@@ -429,19 +433,8 @@ mod tests {
             println!("Test 2");
             // test PrimaryExp -> LVal|Number
             let text = "abc123";
-            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-            println!("Tokens: {:?}", tokens);
-            let mut parser = Parser::new(tokens);
-            parser.primary_exp();
-            let res = Parse {
-                green_node: parser.builder.finish(),
-                errors: parser.errors,
-            };
-            let node = res.syntax();
-            let mut res = String::new();
-            output_cst(&node, 0, text, &mut res, "    ");
+            let res = test_sop(text, Parser::primary_exp);
             print!("CST:\n{}\n", res);
-
             assert_eq!(
                 r#"PrimaryExp@0..6
     LeftValue@0..6
