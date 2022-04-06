@@ -9,7 +9,8 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
 
         let whitespace = [' ' '\t' '\n'] | "\r\n";
         let comment_oneline = "//" (_ # ['\r' '\n'])*;
-        let comment_multiline = "/*" _* "*/";
+        // bug here TODO
+        let comment_multiline = "/*" (_ # ['*'])*(_ # ['/'])* "*/";
         let ident_init = ['a'-'z'];
         let ident_subseq = $ident_init | ['A'-'Z' '0'-'9' '-' '_'];
         let digit = ['0' - '9'];

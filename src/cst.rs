@@ -1,4 +1,6 @@
-//! Concrete Synatx Tree
+//! Concrete Syntax Tree
+//! 
+//! Losslessly concrete syntax tree using rowan
 use crate::syntax::{Lang, SyntaxKind};
 
 use rowan::GreenNode;
@@ -42,11 +44,16 @@ pub struct Parser {
 use SyntaxKind as Kind;
 
 /// macro use to quickly gen code for exp0 => exp1 | exp1 op exp0
+/// 
 /// `cur` is self
 ///
 /// `child` calling method for exp1
+/// 
+/// i.e.: will call $cur.$child()
 ///
-/// multiple concat_op for pattern match
+/// may have multiple concat_op for pattern match
+/// 
+/// i.e: a+b+c+d+e....
 macro_rules! ConcatExp {
     ($cur: ident,$child: ident ,$($concat_op:pat ),*) => {
         $cur.$child();
@@ -692,7 +699,7 @@ mod tests {
         {
             println!("Test 1");
             // test LeftValue-> Ident
-            let text = "void main(int args, int argv[]){}";
+            let text = "void/*aaaa */ main/* strange world indeed */(int /* strange world indeed */args, int/* strange world indeed */ argv[]){}";
             let res = test_sop(text, Parser::func_def, "|");
             
         }
