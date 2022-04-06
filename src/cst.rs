@@ -87,7 +87,11 @@ impl Parser {
                 if expected == out {
                     self.bump()
                 } else {
-                    let mut std_err_msg = format!("Expect {}, found {}:", String::from(expected), String::from(out));
+                    let mut std_err_msg = format!(
+                        "Expect {}, found {}. ",
+                        String::from(expected),
+                        String::from(out)
+                    );
                     std_err_msg.push_str(&err_msg);
                     self.push_err(std_err_msg.as_str());
                 }
@@ -201,20 +205,107 @@ impl Parser {
     /// Block → '{' { BlockItem } '}'
     fn block(&mut self) {
         self.builder.start_node(SyntaxKind::Block.into());
-        self.bump_expect(
-            Kind::LCurly,
-            format!("Expect {}.", String::from(Kind::LCurly)).as_str(),
-        );
+        self.bump_expect(Kind::LCurly, "");
         self.block_item();
-        self.bump_expect(
-            Kind::RCurly,
-            format!("Expect {}.", String::from(Kind::RCurly)).as_str(),
-        );
+        self.bump_expect(Kind::RCurly, "");
         self.builder.finish_node();
     }
+
+    /// BlockItem → Decl | Stmt
     fn block_item(&mut self) {
         self.builder.start_node(SyntaxKind::BlockItem.into());
-        unimplemented!();
+        match self.current() {
+            Some(Kind::ConstKeyword) | Some(Kind::BType) => self.decl(),
+            _ => self.stmt(),
+        }
+        self.builder.finish_node();
+    }
+    /// Stmt → LVal '=' Exp ';' | \[Exp\] ';' | Block
+    ///
+    /// | 'if' '( Cond ')' Stmt \[ 'else' Stmt \]
+    ///
+    /// | 'while' '(' Cond ')' Stmt
+    ///
+    /// | 'break' ';' | 'continue' ';'
+    ///
+    /// | 'return' \[Exp\] ';'
+    ///
+    /// TODO: bugs in select LVal = Exp; or Exp;
+    fn stmt(&mut self) {
+        use Kind::{
+            BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LBracket, LCurly, LParen,
+            OpAsg, RBracket, RParen, ReturnKeyword, Semicolon, WhileKeyword,
+        };
+        self.builder.start_node(SyntaxKind::Statement.into());
+        match self.current() {
+            Some(Ident) => {
+                // Stmt → LVal '=' Exp ';' | \[Exp\] ';'
+                // check ahead to see if a `=` exist in this line of code
+                let mut flag = false;
+                let mut ahead = 0;
+                while self.peek(ahead) != Some(Semicolon) {
+                    match self.peek(ahead) {
+                        Some(OpAsg) => {
+                            flag = true;
+                            break;
+                        }
+                        _ => (),
+                    }
+                    ahead += 1;
+                }
+                if flag {
+                    self.left_value();
+                    self.bump_expect(OpAsg, "");
+                    self.exp();
+                } else {
+                    self.exp();
+                }
+                self.bump_expect(Semicolon, "");
+            }
+            Some(Semicolon) => self.bump(),
+            Some(LCurly) => self.block(),
+            Some(IfKeyword) => {
+                self.bump();
+                self.bump_expect(LParen, "");
+                self.cond();
+                self.bump_expect(RParen, "");
+                self.stmt();
+                if let Some(ElseKeyword) = self.current() {
+                    self.bump();
+                    self.stmt();
+                }
+            }
+            Some(WhileKeyword) => {
+                self.bump();
+                self.bump_expect(LParen, "");
+                self.cond();
+                self.bump_expect(RParen, "");
+                self.stmt();
+            }
+            Some(BreakKeyword) | Some(ContinueKeyword) => {
+                self.bump();
+                self.bump_expect(Semicolon, "");
+            }
+            Some(ReturnKeyword) => {
+                self.bump();
+                if Some(Semicolon) != self.current() {
+                    self.exp();
+                }
+                self.bump_expect(Semicolon, "");
+            }
+            
+            _ => {
+                if Some(Semicolon) != self.current() {
+                    self.exp();
+                }
+                self.bump_expect(Semicolon, "");
+            }
+        }
+        self.builder.finish_node();
+    }
+    fn cond(&mut self) {
+        self.builder.start_node(SyntaxKind::Condition.into());
+        self.logic_or_exp();
         self.builder.finish_node();
     }
     /// Decl -> ConstDecl | VarDecl
@@ -590,6 +681,27 @@ mod tests {
         output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
         res
+    }
+    #[test]
+    fn test_stmt(){
+        {
+            println!("Test 1");
+            // test LeftValue-> Ident
+            let text = "a[0]=b[1];";
+            let res = test_sop(text, Parser::stmt, "-");
+            assert_eq!(
+                "".trim(),""
+            );
+        }
+        {
+            println!("Test 2");
+            // test LeftValue-> Ident
+            let text = "b[1];";
+            let res = test_sop(text, Parser::stmt, "-");
+            assert_eq!(
+                "".trim(),""
+            );
+        }
     }
     #[test]
     fn test_exp() {
