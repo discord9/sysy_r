@@ -21,8 +21,8 @@ pub enum SyntaxKind {
     RParen,    // )
     LCurly,    // {
     RCurly,    // }
-    LSquare,   // [
-    RSquare,   // ]
+    LBracket,   // [
+    RBracket,   // ]
     // Operator
     // unary op '+' '-' '!', '!' only appear in Cond
     Operator, // * / % + - < > <= >= == != && || =

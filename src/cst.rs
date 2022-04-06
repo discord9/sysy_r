@@ -135,10 +135,15 @@ impl Parser {
             match self.peek(0) {
                 Some(SyntaxKind::ConstKeyword) => {
                     self.const_decl();
-                    unimplemented!()
                 }
                 Some(Kind::BType) => {
-                    unimplemented!()
+                    // determine if it's a VarDec or a FuncDef
+                    match self.peek(2) {
+                        Some(Kind::LParen) => {
+                            unimplemented!()
+                        }
+                        _ => self.var_decl(),
+                    }
                 }
                 _ => break,
             }
@@ -146,7 +151,68 @@ impl Parser {
         self.builder.finish_node();
     }
     /// Decl -> ConstDecl | VarDecl
-    fn decl(&mut self) {}
+    fn decl(&mut self) {
+        self.builder.start_node(SyntaxKind::Decl.into());
+        match self.current() {
+            Some(Kind::ConstKeyword) => self.const_decl(),
+            _ => self.var_decl(),
+        }
+        self.builder.finish_node();
+    }
+    fn var_decl(&mut self) {
+        self.builder.start_node(SyntaxKind::VarDecl.into());
+        self.b_type();
+        self.var_def();
+        while let Some(Kind::Comma) = self.current() {
+            self.bump();
+            self.var_def();
+        }
+        self.builder.finish_node();
+    }
+    /// VarDef -> Ident { '\[' ConstExp '\]' }
+    /// 
+    /// | Ident { '\[' ConstExp '\]' } '=' InitVal
+    fn var_def(&mut self) {
+        self.builder.start_node(SyntaxKind::VarDef.into());
+        self.bump_expect(Kind::Ident, "expect a identifier");
+        // { '\[' ConstExp '\]' }
+        if Some(Kind::LBracket) == self.current(){
+            while let Some(Kind::LBracket) = self.current() {
+                self.bump(); //[
+                self.const_exp();
+                self.bump_expect(Kind::RBracket, "Expect `]`");
+            }
+        }
+        // '=' InitVal
+        match self.current() {
+            Some(Kind::OpAsg) => {
+                self.bump();
+                self.init_val();
+            }
+            _ => self.push_err("Expect `=`")
+        }
+        self.builder.finish_node();
+    }
+    /// Exp | '{' \[ InitVal { ',' InitVal } \] '}'
+    fn init_val(&mut self) {
+        self.builder.start_node(SyntaxKind::InitVal.into());
+        match self.current() {
+            Some(Kind::LCurly) => {
+                self.bump();
+                if Some(Kind::RCurly) != self.current() {
+                    self.init_val();
+                    while let Some(Kind::Comma) = self.current() {
+                        self.bump();
+                        self.init_val();
+                    }
+                    
+                }
+                self.bump_expect(Kind::RCurly, "Expect `}`");
+            },
+            _ => self.exp()
+        }
+        self.builder.finish_node();
+    }
     /// ConstDecl -> `const` BType ConstDef {`,` ConstDef }`;`
     fn const_decl(&mut self) {
         self.builder.start_node(SyntaxKind::ConstDecl.into());
@@ -174,9 +240,47 @@ impl Parser {
         };
         self.builder.finish_node();
     }
-    /// ConstDef -> Ident {`[` ConstExp `]` `=` ConstInitVal}
+    /// ConstDef -> Ident {`[` ConstExp `]` } `=` ConstInitVal
     fn const_def(&mut self) {
-        unimplemented!()
+        self.builder.start_node(SyntaxKind::ConstDef.into());
+        match self.current() {
+            Some(Kind::Ident) => {
+                self.bump();
+                while let Some(Kind::LBracket) = self.current() {
+                    self.bump();
+                    self.const_exp();
+                    self.bump_expect(Kind::RBracket, "Expect `]`");
+                }
+                self.bump_expect(Kind::OpAsg, "Expect `=`");
+                self.const_init_val();
+            }
+            _ => self.push_err("Expect a identifier."),
+        }
+        self.builder.finish_node();
+    }
+    /// COnstInitVal => ConstExp | `{` [ ConstInitVal { `,`ConstInitVal } ] `}`
+    fn const_init_val(&mut self) {
+        self.builder.start_node(SyntaxKind::ConstInitVal.into());
+        match self.current() {
+            Some(Kind::LCurly) => {
+                self.bump();
+                if self.current() != Some(Kind::RCurly) {
+                    self.const_init_val();
+                    while let Some(Kind::Comma) = self.current() {
+                        self.bump();
+                        self.const_init_val();
+                    }
+                }
+                self.bump_expect(Kind::RCurly, "Expect `}`");
+            }
+            _ => self.const_exp(),
+        }
+        self.builder.finish_node();
+    }
+    fn const_exp(&mut self) {
+        self.builder.start_node(SyntaxKind::ConstExp.into());
+        self.add_exp();
+        self.builder.finish_node();
     }
     /// BType -> `int` | `float`
     fn b_type(&mut self) {
@@ -196,10 +300,10 @@ impl Parser {
         self.builder.start_node(Kind::LeftValue.into());
         if let Some(Kind::Ident) = self.current() {
             self.bump();
-            while let Some(Kind::LSquare) = self.current() {
+            while let Some(Kind::LBracket) = self.current() {
                 self.bump();
                 self.exp();
-                self.bump_expect(Kind::RSquare, "Expect `]`");
+                self.bump_expect(Kind::RBracket, "Expect `]`");
             }
         }
         self.builder.finish_node();
@@ -534,7 +638,8 @@ MulExp@0..5
             let text = "-1*0+1<2==1<3&&2||3&&4";
             let res = test_sop(text, Parser::logic_or_exp, "-");
             assert_eq!(
-r#"LogicOrExp@0..22
+                r#"
+LogicOrExp@0..22
 -LogicAndExp@0..16
 --EqExp@0..13
 ---RelationExp@0..8
@@ -607,7 +712,7 @@ r#"LogicOrExp@0..22
 -------PrimaryExp@21..22
 --------Number@21..22
 ---------IntConst@21..22 "4""#
-                .trim(),
+                    .trim(),
                 res.trim()
             );
         }

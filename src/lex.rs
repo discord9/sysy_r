@@ -48,8 +48,8 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
                 ")" => SyntaxKind::RParen,
                 "{" => SyntaxKind::LCurly,
                 "}" => SyntaxKind::RCurly,
-                "[" => SyntaxKind::LSquare,
-                "]" => SyntaxKind::RSquare,
+                "[" => SyntaxKind::LBracket,
+                "]" => SyntaxKind::RBracket,
                 _ => SyntaxKind::Error
             };
             lexer.return_(ret)
