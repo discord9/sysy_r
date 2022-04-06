@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 lexgen = "0.10.0"
 lexgen_util = "0.10.0"
+proptest = "1.0.0"
 rowan = "0.15.4"

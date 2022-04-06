@@ -3,14 +3,16 @@ use lexgen::lexer;
 use lexgen_util::Loc;
 /// Split the input string into a flat list of tokens
 /// (such as L_PAREN, WORD, and WHITESPACE)
+/// 
+/// multiline comment come from [stackoverflow: Regex to match a C-style multiline comment](https://stackoverflow.com/questions/13014947/regex-to-match-a-c-style-multiline-comment?msclkid=06d711cbb5bf11ec800ef20a541c0df9)
 pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
     lexer! {
         Lexer -> SyntaxKind;
 
         let whitespace = [' ' '\t' '\n'] | "\r\n";
         let comment_oneline = "//" (_ # ['\r' '\n'])*;
-        // bug here TODO
-        let comment_multiline = "/*" (_ # ['*'])*(_ # ['/'])* "*/";
+        // from [Regex to match a C-style multiline comment](https://stackoverflow.com/questions/13014947/regex-to-match-a-c-style-multiline-comment?msclkid=06d711cbb5bf11ec800ef20a541c0df9)
+        let comment_multiline = "/*" (_ # ['*'])* '*'+ ((_ # ['/' '*' ])(_ # '*')* '*'+)* "/";
         let ident_init = ['a'-'z'];
         let ident_subseq = $ident_init | ['A'-'Z' '0'-'9' '-' '_'];
         let digit = ['0' - '9'];
@@ -101,7 +103,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
 }
 
 #[test]
-fn test_comment() {
+fn test_integrate() {
     {
         let text = r"
         // one line 
@@ -140,7 +142,27 @@ fn test_comment() {
 
 #[cfg(test)]
 mod test {
-    use crate::lex::lex;
+    use crate::lex::{lex, SyntaxKind};
+    use proptest::{proptest, prop_assert_eq};
+    proptest!{
+        #[test]
+        fn fuzz_comment(text in r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/"){
+            let res = lex(text.as_str());
+            prop_assert_eq!(res.len(), 1);
+            prop_assert_eq!(res.get(0).unwrap().1, SyntaxKind::Comment);
+            prop_assert_eq!(res.get(0).unwrap().0.byte_idx, 0);
+            prop_assert_eq!(res.get(0).unwrap().2.byte_idx, text.len());
+        }
+    }
+    #[test]
+    fn test_comment(){
+        let text = "/**/";
+        let res = lex(text);
+        for tok in res {
+            let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
+            println!("{:?}@{}..{} \'{}\'", tok.1,tok.0.byte_idx,tok.2.byte_idx, src);
+        }
+    }
     #[test]
     fn test_number(){
         use crate::syntax::SyntaxKind as Kind;
