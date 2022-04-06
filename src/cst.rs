@@ -65,8 +65,15 @@ macro_rules! ConcatExp {
 impl Parser {
     fn new(mut tokens: Vec<(SyntaxKind, String)>) -> Self {
         tokens.reverse();
+        // delete whitespace
+        let mut new_tokens = Vec::new();
+        tokens.into_iter().map(|tok|{
+            if tok.0!=Kind::Whitespace{
+                new_tokens.push(tok);
+            }
+        }).count();
         Parser {
-            tokens: tokens,
+            tokens: new_tokens,
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
         }
@@ -229,12 +236,10 @@ impl Parser {
     /// | 'break' ';' | 'continue' ';'
     ///
     /// | 'return' \[Exp\] ';'
-    ///
-    /// TODO: bugs in select LVal = Exp; or Exp;
     fn stmt(&mut self) {
         use Kind::{
-            BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LBracket, LCurly, LParen,
-            OpAsg, RBracket, RParen, ReturnKeyword, Semicolon, WhileKeyword,
+            BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LCurly, LParen,
+            OpAsg, RParen, ReturnKeyword, Semicolon, WhileKeyword,
         };
         self.builder.start_node(SyntaxKind::Statement.into());
         match self.current() {
@@ -243,6 +248,7 @@ impl Parser {
                 // check ahead to see if a `=` exist in this line of code
                 let mut flag = false;
                 let mut ahead = 0;
+                // TODO: better predicate
                 while self.peek(ahead) != Some(Semicolon) {
                     match self.peek(ahead) {
                         Some(OpAsg) => {
@@ -293,7 +299,7 @@ impl Parser {
                 }
                 self.bump_expect(Semicolon, "");
             }
-            
+
             _ => {
                 if Some(Semicolon) != self.current() {
                     self.exp();
@@ -683,14 +689,55 @@ mod tests {
         res
     }
     #[test]
-    fn test_stmt(){
+    fn test_func_def(){
+        {
+            println!("Test 1");
+            // test LeftValue-> Ident
+            let text = "void main(int args, int argv[]){}";
+            let res = test_sop(text, Parser::func_def, "|");
+        }
+    }
+    #[test]
+    fn test_stmt() {
         {
             println!("Test 1");
             // test LeftValue-> Ident
             let text = "a[0]=b[1];";
             let res = test_sop(text, Parser::stmt, "-");
             assert_eq!(
-                "".trim(),""
+                r#"
+Statement@0..10
+-LeftValue@0..4
+--Ident@0..1 "a"
+--LBracket@1..2 "["
+--Expression@2..3
+---AddExp@2..3
+----MulExp@2..3
+-----UnaryExp@2..3
+------PrimaryExp@2..3
+-------Number@2..3
+--------IntConst@2..3 "0"
+--RBracket@3..4 "]"
+-OpAsg@4..5 "="
+-Expression@5..9
+--AddExp@5..9
+---MulExp@5..9
+----UnaryExp@5..9
+-----PrimaryExp@5..9
+------LeftValue@5..9
+-------Ident@5..6 "b"
+-------LBracket@6..7 "["
+-------Expression@7..8
+--------AddExp@7..8
+---------MulExp@7..8
+----------UnaryExp@7..8
+-----------PrimaryExp@7..8
+------------Number@7..8
+-------------IntConst@7..8 "1"
+-------RBracket@8..9 "]"
+-Semicolon@9..10 ";""#
+                    .trim(),
+                res.trim()
             );
         }
         {
@@ -699,7 +746,28 @@ mod tests {
             let text = "b[1];";
             let res = test_sop(text, Parser::stmt, "-");
             assert_eq!(
-                "".trim(),""
+                r#"
+Statement@0..5
+-Expression@0..4
+--AddExp@0..4
+---MulExp@0..4
+----UnaryExp@0..4
+-----PrimaryExp@0..4
+------LeftValue@0..4
+-------Ident@0..1 "b"
+-------LBracket@1..2 "["
+-------Expression@2..3
+--------AddExp@2..3
+---------MulExp@2..3
+----------UnaryExp@2..3
+-----------PrimaryExp@2..3
+------------Number@2..3
+-------------IntConst@2..3 "1"
+-------RBracket@3..4 "]"
+-Semicolon@4..5 ";"
+                "#
+                .trim(),
+                res.trim()
             );
         }
     }

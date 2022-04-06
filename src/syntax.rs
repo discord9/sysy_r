@@ -97,7 +97,7 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
 impl From<SyntaxKind> for String {
     fn from(kind: SyntaxKind) -> Self {
         use SyntaxKind as Kind;
-        use Kind::{BType, LParen, RParen,LBracket, RBracket ,Ident, OpAsg};
+        use Kind::{BType, LParen, RParen,LBracket, RBracket ,Ident, OpAsg, Whitespace};
         let r = match kind{
             BType => "Basic Type",
             LParen => "(",
@@ -106,6 +106,7 @@ impl From<SyntaxKind> for String {
             RBracket => "]",
             Ident => "Identifier",
             OpAsg => "=",
+            Whitespace => "whitespace",
             _ => "Node"
         };
         r.to_string()
