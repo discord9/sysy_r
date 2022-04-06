@@ -87,7 +87,9 @@ impl Parser {
                 if expected == out {
                     self.bump()
                 } else {
-                    self.push_err(err_msg);
+                    let mut std_err_msg = format!("Expect {}, found {}:", String::from(expected), String::from(out));
+                    std_err_msg.push_str(&err_msg);
+                    self.push_err(std_err_msg.as_str());
                 }
             }
             _ => self.push_err(err_msg),
@@ -142,12 +144,77 @@ impl Parser {
                         Some(Kind::LParen) => {
                             unimplemented!()
                         }
-                        _ => self.var_decl(),
+                        _ => self.decl(),
                     }
                 }
                 _ => break,
             }
         }
+        self.builder.finish_node();
+    }
+    /// FuncDef → FuncType Ident '(' \[FuncFParams\] ')' Block
+    fn func_def(&mut self) {
+        self.builder.start_node(SyntaxKind::FuncDef.into());
+        let expected = [Kind::BType, Kind::Ident, Kind::LParen];
+        for e in expected {
+            self.bump_expect(e, format!("Expect {}", String::from(e)).as_str());
+        }
+        self.func_formal_params();
+        self.bump_expect(Kind::RParen, "Expect `)`");
+        self.block();
+        self.builder.finish_node();
+    }
+    /// FuncFParam { ',' FuncFParam }
+    fn func_formal_params(&mut self) {
+        self.builder.start_node(SyntaxKind::FuncFParams.into());
+        ConcatExp!(self, func_formal_param, Kind::Comma);
+        self.builder.finish_node();
+    }
+    /// FuncFParam → BType Ident ['[' ']' { '[' Exp ']' }]
+    fn func_formal_param(&mut self) {
+        self.builder.start_node(SyntaxKind::FuncFParam.into());
+        self.bump_expect(
+            Kind::BType,
+            format!("Expect {}.", String::from(Kind::BType)).as_str(),
+        );
+        self.bump_expect(
+            Kind::Ident,
+            format!("Expect {}.", String::from(Kind::Ident)).as_str(),
+        );
+        if let Some(Kind::LBracket) = self.current() {
+            self.bump();
+            self.bump_expect(
+                Kind::RBracket,
+                format!("Expect {}.", String::from(Kind::RBracket)).as_str(),
+            );
+            while let Some(Kind::LBracket) = self.current() {
+                self.bump();
+                self.exp();
+                self.bump_expect(
+                    Kind::RBracket,
+                    format!("Expect {}.", String::from(Kind::RBracket)).as_str(),
+                );
+            }
+        }
+        self.builder.finish_node();
+    }
+    /// Block → '{' { BlockItem } '}'
+    fn block(&mut self) {
+        self.builder.start_node(SyntaxKind::Block.into());
+        self.bump_expect(
+            Kind::LCurly,
+            format!("Expect {}.", String::from(Kind::LCurly)).as_str(),
+        );
+        self.block_item();
+        self.bump_expect(
+            Kind::RCurly,
+            format!("Expect {}.", String::from(Kind::RCurly)).as_str(),
+        );
+        self.builder.finish_node();
+    }
+    fn block_item(&mut self) {
+        self.builder.start_node(SyntaxKind::BlockItem.into());
+        unimplemented!();
         self.builder.finish_node();
     }
     /// Decl -> ConstDecl | VarDecl
@@ -170,13 +237,13 @@ impl Parser {
         self.builder.finish_node();
     }
     /// VarDef -> Ident { '\[' ConstExp '\]' }
-    /// 
+    ///
     /// | Ident { '\[' ConstExp '\]' } '=' InitVal
     fn var_def(&mut self) {
         self.builder.start_node(SyntaxKind::VarDef.into());
         self.bump_expect(Kind::Ident, "expect a identifier");
         // { '\[' ConstExp '\]' }
-        if Some(Kind::LBracket) == self.current(){
+        if Some(Kind::LBracket) == self.current() {
             while let Some(Kind::LBracket) = self.current() {
                 self.bump(); //[
                 self.const_exp();
@@ -189,7 +256,7 @@ impl Parser {
                 self.bump();
                 self.init_val();
             }
-            _ => self.push_err("Expect `=`")
+            _ => self.push_err("Expect `=`"),
         }
         self.builder.finish_node();
     }
@@ -205,11 +272,10 @@ impl Parser {
                         self.bump();
                         self.init_val();
                     }
-                    
                 }
                 self.bump_expect(Kind::RCurly, "Expect `}`");
-            },
-            _ => self.exp()
+            }
+            _ => self.exp(),
         }
         self.builder.finish_node();
     }

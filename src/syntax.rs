@@ -64,7 +64,7 @@ pub enum SyntaxKind {
     FuncFParams,
     FuncFParam,
     Block,
-    BLockItem,
+    BlockItem,
     Statement,
     Expression,
     Condition,
@@ -91,6 +91,23 @@ pub enum SyntaxKind {
 impl From<SyntaxKind> for rowan::SyntaxKind {
     fn from(kind: SyntaxKind) -> Self {
         Self(kind as u16)
+    }
+}
+
+impl From<SyntaxKind> for String {
+    fn from(kind: SyntaxKind) -> Self {
+        use SyntaxKind as Kind;
+        use Kind::{BType, LParen, RParen,LBracket, RBracket ,Ident};
+        let r = match kind{
+            BType => "Basic Type",
+            LParen => "(",
+            RParen => ")",
+            LBracket => "[",
+            RBracket => "]",
+            Ident => "Identifier",
+            _ => "Node"
+        };
+        r.to_string()
     }
 }
 
