@@ -65,15 +65,8 @@ macro_rules! ConcatExp {
 impl Parser {
     fn new(mut tokens: Vec<(SyntaxKind, String)>) -> Self {
         tokens.reverse();
-        // delete whitespace
-        let mut new_tokens = Vec::new();
-        tokens.into_iter().map(|tok|{
-            if tok.0!=Kind::Whitespace{
-                new_tokens.push(tok);
-            }
-        }).count();
         Parser {
-            tokens: new_tokens,
+            tokens: tokens,
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
         }
@@ -84,11 +77,13 @@ impl Parser {
     }
     /// Advance one token, adding it to the current branch of the tree builder.
     fn bump(&mut self) {
-        let (kind, text) = self.tokens.pop().unwrap();
+        self.skip_ws_cmt();
+        let (mut kind, mut text) = self.tokens.pop().unwrap();
         self.builder.token(kind.into(), text.as_str());
     }
     /// bump expected token or push a error node with given error message
     fn bump_expect(&mut self, expected: Kind, err_msg: &str) {
+        self.skip_ws_cmt();
         match self.current() {
             Some(out) => {
                 if expected == out {
@@ -136,7 +131,9 @@ impl Parser {
     fn skip_ws_cmt(&mut self) {
         use SyntaxKind::{Comment, Whitespace};
         while self.current() == Some(Whitespace) || self.current() == Some(Comment) {
-            self.bump()
+            // skip all whitespace and push them into current node
+            let (mut kind, mut text) = self.tokens.pop().unwrap();
+            self.builder.token(kind.into(), text.as_str());
         }
     }
     /// CompUnit -> (Decl | FuncDef) +
@@ -213,7 +210,9 @@ impl Parser {
     fn block(&mut self) {
         self.builder.start_node(SyntaxKind::Block.into());
         self.bump_expect(Kind::LCurly, "");
-        self.block_item();
+        if Some(Kind::RCurly) != self.current(){
+            self.block_item();
+        }
         self.bump_expect(Kind::RCurly, "");
         self.builder.finish_node();
     }
@@ -695,6 +694,7 @@ mod tests {
             // test LeftValue-> Ident
             let text = "void main(int args, int argv[]){}";
             let res = test_sop(text, Parser::func_def, "|");
+            
         }
     }
     #[test]
