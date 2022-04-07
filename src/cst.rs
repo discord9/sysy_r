@@ -1,5 +1,5 @@
 //! Concrete Syntax Tree
-//! 
+//!
 //! Losslessly concrete syntax tree using rowan
 use crate::syntax::{Lang, SyntaxKind};
 
@@ -44,15 +44,15 @@ pub struct Parser {
 use SyntaxKind as Kind;
 
 /// macro use to quickly gen code for exp0 => exp1 | exp1 op exp0
-/// 
+///
 /// `cur` is self
 ///
 /// `child` calling method for exp1
-/// 
+///
 /// i.e.: will call $cur.$child()
 ///
 /// may have multiple concat_op for pattern match
-/// 
+///
 /// i.e: a+b+c+d+e....
 macro_rules! ConcatExp {
     ($cur: ident,$child: ident ,$($concat_op:pat ),*) => {
@@ -121,6 +121,29 @@ impl Parser {
     fn current(&self) -> Option<SyntaxKind> {
         self.tokens.last().map(|(kind, _)| *kind)
     }
+
+    /// Peek ahead and skip whitespace and comment
+    fn peek_skip(&self, ahead: usize) -> Option<Kind> {
+        let mut idx = self.tokens.len() - 1;
+        let mut cur_ahead = 0;
+        loop {
+            match self.tokens.get(idx) {
+                Some((Kind::Whitespace, _)) | Some((Kind::Comment, _)) => (),
+                Some((k,_)) => {
+                    if cur_ahead == ahead{
+                        return Some(*k);
+                    }
+                    cur_ahead += 1;
+                }
+                _ => return None,
+            }
+            if idx == 0 {
+                return None;
+            }
+            idx -= 1;
+        }
+    }
+
     /// Peek ahead
     ///
     /// `peek(0) == current()`
@@ -149,13 +172,13 @@ impl Parser {
     fn comp_unit(&mut self) {
         self.builder.start_node(SyntaxKind::CompUnit.into());
         loop {
-            match self.peek(0) {
+            match self.peek_skip(0) {
                 Some(SyntaxKind::ConstKeyword) => {
                     self.const_decl();
                 }
                 Some(Kind::BType) => {
                     // determine if it's a VarDec or a FuncDef
-                    match self.peek(2) {
+                    match self.peek_skip(2) {
                         Some(Kind::LParen) => {
                             unimplemented!()
                         }
@@ -217,7 +240,7 @@ impl Parser {
     fn block(&mut self) {
         self.builder.start_node(SyntaxKind::Block.into());
         self.bump_expect(Kind::LCurly, "");
-        if Some(Kind::RCurly) != self.current(){
+        if Some(Kind::RCurly) != self.current() {
             self.block_item();
         }
         self.bump_expect(Kind::RCurly, "");
@@ -244,8 +267,8 @@ impl Parser {
     /// | 'return' \[Exp\] ';'
     fn stmt(&mut self) {
         use Kind::{
-            BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LCurly, LParen,
-            OpAsg, RParen, ReturnKeyword, Semicolon, WhileKeyword,
+            BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LCurly, LParen, OpAsg,
+            RParen, ReturnKeyword, Semicolon, WhileKeyword,
         };
         self.builder.start_node(SyntaxKind::Statement.into());
         match self.current() {
@@ -255,8 +278,8 @@ impl Parser {
                 let mut flag = false;
                 let mut ahead = 0;
                 // TODO: better predicate
-                while self.peek(ahead) != Some(Semicolon) {
-                    match self.peek(ahead) {
+                while self.peek_skip(ahead) != Some(Semicolon) {
+                    match self.peek_skip(ahead) {
                         Some(OpAsg) => {
                             flag = true;
                             break;
@@ -507,7 +530,7 @@ impl Parser {
     /// UnaryExp -> PrimaryExp | Ident `(`\[ FuncRParams \]`)` | UnaryOp UnaryExp
     fn unary_exp(&mut self) {
         self.builder.start_node(Kind::UnaryExp.into());
-        match (self.current(), self.peek(1)) {
+        match (self.current(), self.peek_skip(1)) {
             (Some(Kind::Ident), Some(Kind::LParen)) => {
                 self.bump(); // ident
                 self.bump_expect(Kind::LParen, "Expect `(`.");
@@ -695,13 +718,28 @@ mod tests {
         res
     }
     #[test]
-    fn test_func_def(){
+    fn test_peek_skip(){
+        println!("Test 1");
+            // test LeftValue-> Ident
+            let text = "void      /**/ aab();";
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+            println!("{:?}", tokens);
+            let mut parser = Parser::new(tokens);
+            let e = [Kind::BType, Kind::Ident, Kind::LParen, Kind::RParen, Kind::Semicolon];
+            for (i,e) in e.into_iter().enumerate(){
+                assert_eq!(Some(e), parser.peek_skip(i));
+            }
+            println!("{:?}", parser.peek_skip(1));
+    }
+    #[test]
+    fn test_func_def() {
         {
             println!("Test 1");
             // test LeftValue-> Ident
-            let text = "void/*aaaa */ main/* strange world indeed */(int /* strange world indeed */args, int/* strange world indeed */ argv[]){}";
+            let text = "void/*aaaa */ main/* strange world indeed */(int /* strange world indeed */args, int/* strange world indeed */ argv[]){
+                print(hello);
+            }";
             let res = test_sop(text, Parser::func_def, "|");
-            
         }
     }
     #[test]

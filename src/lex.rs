@@ -26,6 +26,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         let exp_part = 'e'$sign? $digit+ | 'E'$sign? $digit+;
         let dec_float_const = $frac_const $exp_part? | $digit+ $exp_part;
 
+        rule Init{
         "int" | "float" | "void" => |lexer| {
             lexer.return_(SyntaxKind::BType)
         },
@@ -92,6 +93,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
             SyntaxKind::Comment
         },
         _ = SyntaxKind::Error,
+    }
     };
     Lexer::new(text)
         .into_iter()
