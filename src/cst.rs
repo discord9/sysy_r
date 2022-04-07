@@ -18,7 +18,6 @@ pub struct Parse {
 /// It is also immutable, like a GreenNode,
 /// but it contains parent pointers, offsets, and
 /// has identity semantics.
-
 type SyntaxNode = rowan::SyntaxNode<Lang>;
 #[allow(unused)]
 type SyntaxToken = rowan::SyntaxToken<Lang>;
@@ -621,6 +620,7 @@ pub fn parse(text: &str) -> Parse {
 #[cfg(test)]
 mod tests {
     use super::{Parse, Parser, SyntaxElement, SyntaxNode};
+    use serde::{Serialize, Deserialize};
     use crate::lex::lex;
     use crate::syntax::SyntaxKind as Kind;
     fn lex_into_tokens(text: &str) -> Vec<(Kind, String)> {
@@ -634,6 +634,10 @@ mod tests {
             })
             .collect();
         tokens
+    }
+    /// serialize cst to a simpler `ron` form
+    fn ser_cst(node: &SyntaxNode, text: &str) {
+
     }
     /// output cst into a string.
     ///
@@ -703,8 +707,14 @@ mod tests {
     where
         F: Fn(&mut Parser),
     {
+        use ron::ser::{to_string_pretty, PrettyConfig, to_string};
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-        println!("Tokens: {:?}", tokens);
+        //println!("Tokens: {:?}", tokens);
+        let pretty = PrettyConfig::new()
+        .depth_limit(2)
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+        println!("Sered tokens: {}", to_string_pretty(&tokens, pretty).unwrap());
         let mut parser = Parser::new(tokens);
         f(&mut parser);
         let res = Parse {
@@ -719,6 +729,21 @@ mod tests {
         output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
         res
+    }
+    #[test]
+    fn test_syntax_node_ser(){
+        let text = "{
+            print(hello);
+        }";
+        let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+        let mut parser = Parser::new(tokens);
+        parser.block();
+        let res = Parse {
+            green_node: parser.builder.finish(),
+            errors: parser.errors,
+        };
+        let node = res.syntax();
+        println!("{:?}", node);
     }
     #[test]
     fn test_block(){

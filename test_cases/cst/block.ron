@@ -1,0 +1,32 @@
+test_cases :[
+    (
+        src: r#"{
+                print(hello);
+                a[0] = b[1];
+            }"#
+        tokens: [
+                    (LCurly, "{"),// [0]
+                    (Whitespace, "\n                "),// [1]
+                    (Ident, "print"),// [2]
+                    (LParen, "("),// [3]
+                    (Ident, "hello"),// [4]
+                    (RParen, ")"),// [5]
+                    (Semicolon, ";"),// [6]
+                    (Whitespace, "\n                "),// [7]
+                    (Ident, "a"),// [8]
+                    (LBracket, "["),// [9]
+                    (IntConst, "0"),// [10]
+                    (RBracket, "]"),// [11]
+                    (Whitespace, " "),// [12]
+                    (OpAsg, "="),// [13]
+                    (Whitespace, " "),// [14]
+                    (Ident, "b"),// [15]
+                    (LBracket, "["),// [16]
+                    (IntConst, "1"),// [17]
+                    (RBracket, "]"),// [18]
+                    (Semicolon, ";"),// [19]
+                    (Whitespace, "\n            "),// [20]
+                    (RCurly, "}"),
+                ]
+    )
+]

@@ -1,5 +1,8 @@
 /// define all possible tokens and nodes' type tag that may appear in sysY language.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 //#[allow(non_camel_case_types)]
 #[repr(u16)]
 #[allow(unused)] //to be REMOVE!
