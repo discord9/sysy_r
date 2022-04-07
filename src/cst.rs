@@ -118,12 +118,15 @@ impl Parser {
         self.builder.finish_node();
     }
     /// Peek at the first unprocessed token
+    /// skip whitespace and comment
     fn current(&self) -> Option<SyntaxKind> {
-        self.tokens.last().map(|(kind, _)| *kind)
+        self.peek_skip(0)
+        //self.tokens.last().map(|(kind, _)| *kind)
     }
 
     /// Peek ahead and skip whitespace and comment
     fn peek_skip(&self, ahead: usize) -> Option<Kind> {
+        if self.tokens.len()==0{return None};
         let mut idx = self.tokens.len() - 1;
         let mut cur_ahead = 0;
         loop {
@@ -721,7 +724,7 @@ mod tests {
     fn test_peek_skip(){
         println!("Test 1");
             // test LeftValue-> Ident
-            let text = "void      /**/ aab();";
+            let text = "    void      /**/ aab();";
             let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
             println!("{:?}", tokens);
             let mut parser = Parser::new(tokens);
