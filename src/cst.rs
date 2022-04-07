@@ -125,14 +125,16 @@ impl Parser {
 
     /// Peek ahead and skip whitespace and comment
     fn peek_skip(&self, ahead: usize) -> Option<Kind> {
-        if self.tokens.len()==0{return None};
+        if self.tokens.len() == 0 {
+            return None;
+        };
         let mut idx = self.tokens.len() - 1;
         let mut cur_ahead = 0;
         loop {
             match self.tokens.get(idx) {
                 Some((Kind::Whitespace, _)) | Some((Kind::Comment, _)) => (),
-                Some((k,_)) => {
-                    if cur_ahead == ahead{
+                Some((k, _)) => {
+                    if cur_ahead == ahead {
                         return Some(*k);
                     }
                     cur_ahead += 1;
@@ -620,9 +622,9 @@ pub fn parse(text: &str) -> Parse {
 #[cfg(test)]
 mod tests {
     use super::{Parse, Parser, SyntaxElement, SyntaxNode};
-    use serde::{Serialize, Deserialize};
     use crate::lex::lex;
     use crate::syntax::SyntaxKind as Kind;
+    use serde::{Deserialize, Serialize};
     fn lex_into_tokens(text: &str) -> Vec<(Kind, String)> {
         let tokens: Vec<(Kind, String)> = lex(text)
             .into_iter()
@@ -635,9 +637,51 @@ mod tests {
             .collect();
         tokens
     }
+    /// for ser to ron
+    #[derive(Serialize)]
+    enum CSTNodeOrToken {
+        CSTNode(CSTNode),
+        CSTToken(CSTToken),
+    }
+    #[derive(Serialize)]
+    struct CSTNode {
+        node: String,
+        childs: Vec<CSTNodeOrToken>,
+    }
+    #[derive(Serialize)]
+    struct CSTToken {
+        kind: String,
+        text: String,
+    }
     /// serialize cst to a simpler `ron` form
-    fn ser_cst(node: &SyntaxNode, text: &str) {
+    fn ser_cst(node: &SyntaxNode, text: &str) -> CSTNode {
+        let first = format!("{:?}", node);
+        let mut ret = CSTNode {
+            node: first,
+            childs: Vec::new(),
+        };
+        let _ = node
+            .children_with_tokens()
+            .map(|child| match child {
+                SyntaxElement::Node(node) => ret
+                    .childs
+                    .push(CSTNodeOrToken::CSTNode(ser_cst(&node, text))),
 
+                SyntaxElement::Token(token) => {
+                    let kind = format!("{:?}@{:?}", token.kind(), token.text_range());
+                    let text = format!(
+                        "{}",
+                        text.get(
+                            token.text_range().start().into()..token.text_range().end().into()
+                        )
+                        .unwrap()
+                    );
+                    let token = CSTToken { kind, text };
+                    ret.childs.push(CSTNodeOrToken::CSTToken(token));
+                }
+            })
+            .count();
+        ret
     }
     /// output cst into a string.
     ///
@@ -707,31 +751,39 @@ mod tests {
     where
         F: Fn(&mut Parser),
     {
-        use ron::ser::{to_string_pretty, PrettyConfig, to_string};
+        use ron::ser::{to_string, to_string_pretty, PrettyConfig};
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
         //println!("Tokens: {:?}", tokens);
         let pretty = PrettyConfig::new()
-        .depth_limit(2)
-        .separate_tuple_members(false)
-        .enumerate_arrays(true);
-        println!("Sered tokens: {}", to_string_pretty(&tokens, pretty).unwrap());
+            .depth_limit(2)
+            .separate_tuple_members(false)
+            .enumerate_arrays(true);
+        println!(
+            "Sered tokens: {}",
+            to_string_pretty(&tokens, pretty).unwrap()
+        );
         let mut parser = Parser::new(tokens);
         f(&mut parser);
         let res = Parse {
             green_node: parser.builder.finish(),
             errors: parser.errors,
         };
+        let pretty = PrettyConfig::new()
+            .separate_tuple_members(false)
+            .enumerate_arrays(true);
         let node = res.syntax();
         if !res.errors.is_empty() {
             println!("{:?}", res.errors);
         }
+        let ret = ser_cst(&node, text);
+        println!("{}", to_string_pretty(&ret, pretty).unwrap());
         let mut res = String::new();
         output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
         res
     }
     #[test]
-    fn test_syntax_node_ser(){
+    fn test_syntax_node_ser() {
         let text = "{
             print(hello);
         }";
@@ -746,35 +798,41 @@ mod tests {
         println!("{:?}", node);
     }
     #[test]
-    fn test_block(){
+    fn test_block() {
         println!("Test 1");
-            // test LeftValue-> Ident
-            let text = "{
+        // test LeftValue-> Ident
+        let text = "{
                 print(hello);
                 a[0] = b[1];
             }";
-            let res = test_sop(text, Parser::block, "|");
+        let res = test_sop(text, Parser::block, "|");
     }
     #[test]
-    fn test_unary_exp(){
+    fn test_unary_exp() {
         println!("Test 1");
-            // test LeftValue-> Ident
-            let text = " print ( hello )";
-            let res = test_sop(text, Parser::unary_exp, "|");
+        // test LeftValue-> Ident
+        let text = " print ( hello )";
+        let res = test_sop(text, Parser::unary_exp, "|");
     }
     #[test]
-    fn test_peek_skip(){
+    fn test_peek_skip() {
         println!("Test 1");
-            // test LeftValue-> Ident
-            let text = "    void      /**/ aab();";
-            let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
-            println!("{:?}", tokens);
-            let mut parser = Parser::new(tokens);
-            let e = [Kind::BType, Kind::Ident, Kind::LParen, Kind::RParen, Kind::Semicolon];
-            for (i,e) in e.into_iter().enumerate(){
-                assert_eq!(Some(e), parser.peek_skip(i));
-            }
-            println!("{:?}", parser.peek_skip(1));
+        // test LeftValue-> Ident
+        let text = "    void      /**/ aab();";
+        let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+        println!("{:?}", tokens);
+        let mut parser = Parser::new(tokens);
+        let e = [
+            Kind::BType,
+            Kind::Ident,
+            Kind::LParen,
+            Kind::RParen,
+            Kind::Semicolon,
+        ];
+        for (i, e) in e.into_iter().enumerate() {
+            assert_eq!(Some(e), parser.peek_skip(i));
+        }
+        println!("{:?}", parser.peek_skip(1));
     }
     #[test]
     fn test_func_def() {
