@@ -462,7 +462,7 @@ impl Parser {
         }
         self.builder.finish_node();
     }
-    /// COnstInitVal => ConstExp | `{` [ ConstInitVal { `,`ConstInitVal } ] `}`
+    /// ConstInitVal => ConstExp | `{` [ ConstInitVal { `,`ConstInitVal } ] `}`
     fn const_init_val(&mut self) {
         self.builder.start_node(SyntaxKind::ConstInitVal.into());
         match self.current() {
@@ -805,7 +805,21 @@ mod tests {
 
     #[test]
     fn test_integrate(){
-        let text = "const int ARM = 1;";
+        let text = "
+        int main(int argv,int args[]){
+            if(ARMv8==1)print(HELLO_WORLD);
+            while(1){
+                continue;
+            }
+            if(1+2*3%4/5==6)return 0;
+        }";
+        let _text = "
+        const int ARMv8 = 1;
+        const int HELLO_WORLD[12] = {
+            72,101,108,108,111,//Hello
+            44,//,
+            87,111,114,108,100,33//World!
+        };";
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
         println!("Tokens:{:?}", tokens);
         let parse = Parser::new(tokens).parse();

@@ -100,14 +100,19 @@ impl From<SyntaxKind> for rowan::SyntaxKind {
 impl From<SyntaxKind> for String {
     fn from(kind: SyntaxKind) -> Self {
         use SyntaxKind as Kind;
-        use Kind::{BType, LParen, RParen,LBracket, RBracket ,Ident, OpAsg, Whitespace};
+        use Kind::{BType, LParen, RParen,LBracket, RBracket ,Ident, OpAsg, Whitespace, LCurly, RCurly, Comma, IntConst, FloatConst};
         let r = match kind{
             BType => "Basic Type",
             LParen => "(",
             RParen => ")",
             LBracket => "[",
             RBracket => "]",
+            LCurly => "{",
+            RCurly => "}",
+            Comma => ",",
             Ident => "Identifier",
+            IntConst => "integer",
+            FloatConst => "floating number",
             OpAsg => "=",
             Whitespace => "whitespace",
             _ => "Node"

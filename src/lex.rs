@@ -38,7 +38,7 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
                 "while" => SyntaxKind::WhileKeyword,
                 "break" => SyntaxKind::BreakKeyword,
                 "continue" => SyntaxKind::ContinueKeyword,
-                "return" => SyntaxKind::ContinueKeyword,
+                "return" => SyntaxKind::ReturnKeyword,
                 _ => SyntaxKind::Error
             };
             lexer.return_(ret)
