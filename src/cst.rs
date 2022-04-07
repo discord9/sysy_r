@@ -18,11 +18,11 @@ pub struct Parse {
 /// It is also immutable, like a GreenNode,
 /// but it contains parent pointers, offsets, and
 /// has identity semantics.
-type SyntaxNode = rowan::SyntaxNode<Lang>;
+pub type SyntaxNode = rowan::SyntaxNode<Lang>;
 #[allow(unused)]
-type SyntaxToken = rowan::SyntaxToken<Lang>;
+pub type SyntaxToken = rowan::SyntaxToken<Lang>;
 #[allow(unused)]
-type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
+pub type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 impl Parse {
     /// view from SyntaxNode root
