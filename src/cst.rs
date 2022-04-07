@@ -147,7 +147,7 @@ impl Parser {
         }
     }
 
-    /// Peek ahead
+    /// Peek ahead(not skip whitespace or comment)
     ///
     /// `peek(0) == current()`
     fn peek(&self, ahead: usize) -> Option<SyntaxKind> {
@@ -163,9 +163,9 @@ impl Parser {
     /// skip whitespace and comment
     fn skip_ws_cmt(&mut self) {
         use SyntaxKind::{Comment, Whitespace};
-        while self.current() == Some(Whitespace) || self.current() == Some(Comment) {
+        while self.peek(0) == Some(Whitespace) || self.peek(0) == Some(Comment) {
             // skip all whitespace and push them into current node
-            let (mut kind, mut text) = self.tokens.pop().unwrap();
+            let (kind, text) = self.tokens.pop().unwrap();
             self.builder.token(kind.into(), text.as_str());
         }
     }
@@ -243,7 +243,7 @@ impl Parser {
     fn block(&mut self) {
         self.builder.start_node(SyntaxKind::Block.into());
         self.bump_expect(Kind::LCurly, "");
-        if Some(Kind::RCurly) != self.current() {
+        while Some(Kind::RCurly) != self.current() {
             self.block_item();
         }
         self.bump_expect(Kind::RCurly, "");
@@ -535,8 +535,8 @@ impl Parser {
         self.builder.start_node(Kind::UnaryExp.into());
         match (self.current(), self.peek_skip(1)) {
             (Some(Kind::Ident), Some(Kind::LParen)) => {
-                self.bump(); // ident
-                self.bump_expect(Kind::LParen, "Expect `(`.");
+                self.bump_expect(Kind::Ident, ""); // ident
+                self.bump_expect(Kind::LParen, "");
                 if self.current() != Some(Kind::RParen) {
                     self.func_real_params();
                 }
@@ -719,6 +719,23 @@ mod tests {
         output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
         res
+    }
+    #[test]
+    fn test_block(){
+        println!("Test 1");
+            // test LeftValue-> Ident
+            let text = "{
+                print(hello);
+                a[0] = b[1];
+            }";
+            let res = test_sop(text, Parser::block, "|");
+    }
+    #[test]
+    fn test_unary_exp(){
+        println!("Test 1");
+            // test LeftValue-> Ident
+            let text = " print ( hello )";
+            let res = test_sop(text, Parser::unary_exp, "|");
     }
     #[test]
     fn test_peek_skip(){
