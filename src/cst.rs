@@ -614,7 +614,7 @@ impl Parser {
 
 pub fn parse(text: &str) -> Parse {
     use crate::lex::lex;
-    let text = r"hello=world";
+    //let text = r"hello=world";
     let tokens: Vec<(SyntaxKind, String)> = lex(text)
         .into_iter()
         .map(|tok| {
