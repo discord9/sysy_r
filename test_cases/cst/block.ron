@@ -1,32 +1,229 @@
-test_cases :[
-    (
+[
+    (//method: block()
         src: r#"{
                 print(hello);
                 a[0] = b[1];
-            }"#
+            }"#,
         tokens: [
-                    (LCurly, "{"),// [0]
-                    (Whitespace, "\n                "),// [1]
-                    (Ident, "print"),// [2]
-                    (LParen, "("),// [3]
-                    (Ident, "hello"),// [4]
-                    (RParen, ")"),// [5]
-                    (Semicolon, ";"),// [6]
-                    (Whitespace, "\n                "),// [7]
-                    (Ident, "a"),// [8]
-                    (LBracket, "["),// [9]
-                    (IntConst, "0"),// [10]
-                    (RBracket, "]"),// [11]
-                    (Whitespace, " "),// [12]
-                    (OpAsg, "="),// [13]
-                    (Whitespace, " "),// [14]
-                    (Ident, "b"),// [15]
-                    (LBracket, "["),// [16]
-                    (IntConst, "1"),// [17]
-                    (RBracket, "]"),// [18]
-                    (Semicolon, ";"),// [19]
-                    (Whitespace, "\n            "),// [20]
-                    (RCurly, "}"),
-                ]
+    (LCurly, "{"),// [0]
+    (Whitespace, "\n                "),// [1]
+    (Ident, "print"),// [2]
+    (LParen, "("),// [3]
+    (Ident, "hello"),// [4]
+    (RParen, ")"),// [5]
+    (Semicolon, ";"),// [6]
+    (Whitespace, "\n                "),// [7]
+    (Ident, "a"),// [8]
+    (LBracket, "["),// [9]
+    (IntConst, "0"),// [10]
+    (RBracket, "]"),// [11]
+    (Whitespace, " "),// [12]
+    (OpAsg, "="),// [13]
+    (Whitespace, " "),// [14]
+    (Ident, "b"),// [15]
+    (LBracket, "["),// [16]
+    (IntConst, "1"),// [17]
+    (RBracket, "]"),// [18]
+    (Semicolon, ";"),// [19]
+    (Whitespace, "\n            "),// [20]
+    (RCurly, "}"),
+],
+        cst: (
+    node: "Block@0..74",
+    childs: [
+        CSTToken(("LCurly@0..1", "{")),// [0]
+        CSTNode((
+            node: "BlockItem@1..31",
+            childs: [
+                CSTNode((
+                    node: "Statement@1..31",
+                    childs: [
+                        CSTNode((
+                            node: "Expression@1..30",
+                            childs: [
+                                CSTNode((
+                                    node: "AddExp@1..30",
+                                    childs: [
+                                        CSTNode((
+                                            node: "MulExp@1..30",
+                                            childs: [
+                                                CSTNode((
+                                                    node: "UnaryExp@1..30",
+                                                    childs: [
+                                                        CSTToken(("Whitespace@1..18", "\n                ")),// [0]
+                                                        CSTToken(("Ident@18..23", "print")),// [1]
+                                                        CSTToken(("LParen@23..24", "(")),// [2]
+                                                        CSTNode((
+                                                            node: "FuncRParams@24..29",
+                                                            childs: [
+                                                                CSTNode((
+                                                                    node: "Expression@24..29",
+                                                                    childs: [
+                                                                        CSTNode((
+                                                                            node: "AddExp@24..29",
+                                                                            childs: [
+                                                                                CSTNode((
+                                                                                    node: "MulExp@24..29",
+                                                                                    childs: [
+                                                                                        CSTNode((
+                                                                                            node: "UnaryExp@24..29",
+                                                                                            childs: [
+                                                                                                CSTNode((
+                                                                                                    node: "PrimaryExp@24..29",
+                                                                                                    childs: [
+                                                                                                        CSTNode((
+                                                                                                            node: "LeftValue@24..29",
+                                                                                                            childs: [
+                                                                                                                CSTToken(("Ident@24..29", "hello")),
+                                                                                                            ],
+                                                                                                        )),
+                                                                                                    ],
+                                                                                                )),
+                                                                                            ],
+                                                                                        )),
+                                                                                    ],
+                                                                                )),
+                                                                            ],
+                                                                        )),
+                                                                    ],
+                                                                )),
+                                                            ],
+                                                        )),// [3]
+                                                        CSTToken(("RParen@29..30", ")")),
+                                                    ],
+                                                )),
+                                            ],
+                                        )),
+                                    ],
+                                )),
+                            ],
+                        )),// [0]
+                        CSTToken(("Semicolon@30..31", ";")),
+                    ],
+                )),
+            ],
+        )),// [1]
+        CSTNode((
+            node: "BlockItem@31..60",
+            childs: [
+                CSTNode((
+                    node: "Statement@31..60",
+                    childs: [
+                        CSTNode((
+                            node: "LeftValue@31..52",
+                            childs: [
+                                CSTToken(("Whitespace@31..48", "\n                ")),// [0]
+                                CSTToken(("Ident@48..49", "a")),// [1]
+                                CSTToken(("LBracket@49..50", "[")),// [2]
+                                CSTNode((
+                                    node: "Expression@50..51",
+                                    childs: [
+                                        CSTNode((
+                                            node: "AddExp@50..51",
+                                            childs: [
+                                                CSTNode((
+                                                    node: "MulExp@50..51",
+                                                    childs: [
+                                                        CSTNode((
+                                                            node: "UnaryExp@50..51",
+                                                            childs: [
+                                                                CSTNode((
+                                                                    node: "PrimaryExp@50..51",
+                                                                    childs: [
+                                                                        CSTNode((
+                                                                            node: "Number@50..51",
+                                                                            childs: [
+                                                                                CSTToken(("IntConst@50..51", "0")),
+                                                                            ],
+                                                                        )),
+                                                                    ],
+                                                                )),
+                                                            ],
+                                                        )),
+                                                    ],
+                                                )),
+                                            ],
+                                        )),
+                                    ],
+                                )),// [3]
+                                CSTToken(("RBracket@51..52", "]")),
+                            ],
+                        )),// [0]
+                        CSTToken(("Whitespace@52..53", " ")),// [1]
+                        CSTToken(("OpAsg@53..54", "=")),// [2]
+                        CSTNode((
+                            node: "Expression@54..59",
+                            childs: [
+                                CSTNode((
+                                    node: "AddExp@54..59",
+                                    childs: [
+                                        CSTNode((
+                                            node: "MulExp@54..59",
+                                            childs: [
+                                                CSTNode((
+                                                    node: "UnaryExp@54..59",
+                                                    childs: [
+                                                        CSTNode((
+                                                            node: "PrimaryExp@54..59",
+                                                            childs: [
+                                                                CSTNode((
+                                                                    node: "LeftValue@54..59",
+                                                                    childs: [
+                                                                        CSTToken(("Whitespace@54..55", " ")),// [0]
+                                                                        CSTToken(("Ident@55..56", "b")),// [1]
+                                                                        CSTToken(("LBracket@56..57", "[")),// [2]
+                                                                        CSTNode((
+                                                                            node: "Expression@57..58",
+                                                                            childs: [
+                                                                                CSTNode((
+                                                                                    node: "AddExp@57..58",
+                                                                                    childs: [
+                                                                                        CSTNode((
+                                                                                            node: "MulExp@57..58",
+                                                                                            childs: [
+                                                                                                CSTNode((
+                                                                                                    node: "UnaryExp@57..58",
+                                                                                                    childs: [
+                                                                                                        CSTNode((
+                                                                                                            node: "PrimaryExp@57..58",
+                                                                                                            childs: [
+                                                                                                                CSTNode((
+                                                                                                                    node: "Number@57..58",
+                                                                                                                    childs: [
+                                                                                                                        CSTToken(("IntConst@57..58", "1")),
+                                                                                                                    ],
+                                                                                                                )),
+                                                                                                            ],
+                                                                                                        )),
+                                                                                                    ],
+                                                                                                )),
+                                                                                            ],
+                                                                                        )),
+                                                                                    ],
+                                                                                )),
+                                                                            ],
+                                                                        )),// [3]
+                                                                        CSTToken(("RBracket@58..59", "]")),
+                                                                    ],
+                                                                )),
+                                                            ],
+                                                        )),
+                                                    ],
+                                                )),
+                                            ],
+                                        )),
+                                    ],
+                                )),
+                            ],
+                        )),// [3]
+                        CSTToken(("Semicolon@59..60", ";")),
+                    ],
+                )),
+            ],
+        )),// [2]
+        CSTToken(("Whitespace@60..73", "\n            ")),// [3]
+        CSTToken(("RCurly@73..74", "}")),
+    ],
+)
     )
 ]

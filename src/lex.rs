@@ -13,8 +13,8 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         let comment_oneline = "//" (_ # ['\r' '\n'])*;
         // from [Regex to match a C-style multiline comment](https://stackoverflow.com/questions/13014947/regex-to-match-a-c-style-multiline-comment?msclkid=06d711cbb5bf11ec800ef20a541c0df9)
         let comment_multiline = "/*" (_ # ['*'])* '*'+ ((_ # ['/' '*' ])(_ # '*')* '*'+)* "/";
-        let ident_init = ['a'-'z'];
-        let ident_subseq = $ident_init | ['A'-'Z' '0'-'9' '-' '_'];
+        let ident_init = ['a'-'z' 'A'-'Z'];
+        let ident_subseq = $ident_init | ['a'-'z' 'A'-'Z' '0'-'9' '-' '_'];
         let digit = ['0' - '9'];
         let hex_digit = ['a'-'f' 'A'-'F' '0'-'9'];
         let hex_prefix = "0x" | "0X";

@@ -31,6 +31,7 @@ impl Parse {
     }
 }
 
+#[derive(Debug)]
 pub struct Parser {
     /// input tokens, including whitespace and comment
     tokens: Vec<(SyntaxKind, String)>,
@@ -79,7 +80,11 @@ impl Parser {
     }
     /// start parsing
     fn parse(mut self) -> Parse {
-        unimplemented!()
+        self.comp_unit();
+        Parse {
+            green_node: self.builder.finish(),
+            errors: self.errors,
+        }
     }
     /// Advance one token, adding it to the current branch of the tree builder.
     fn bump(&mut self) {
@@ -88,6 +93,8 @@ impl Parser {
         self.builder.token(kind.into(), text.as_str());
     }
     /// bump expected token or push a error node with given error message
+    /// 
+    /// Have default error msg Expect {}, found {}.
     fn bump_expect(&mut self, expected: Kind, err_msg: &str) {
         self.skip_ws_cmt();
         match self.current() {
@@ -184,7 +191,7 @@ impl Parser {
                     // determine if it's a VarDec or a FuncDef
                     match self.peek_skip(2) {
                         Some(Kind::LParen) => {
-                            unimplemented!()
+                            self.func_def()
                         }
                         _ => self.decl(),
                     }
@@ -416,6 +423,7 @@ impl Parser {
             Some(Kind::ConstKeyword) => {
                 self.bump(); // eat `const`
                 self.b_type();
+                self.const_def();
                 loop {
                     match self.current() {
                         Some(Kind::Comma) => {
@@ -621,6 +629,8 @@ pub fn parse(text: &str) -> Parse {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, path::Path};
+
     use super::{Parse, Parser, SyntaxElement, SyntaxNode};
     use crate::lex::lex;
     use crate::syntax::SyntaxKind as Kind;
@@ -637,22 +647,34 @@ mod tests {
             .collect();
         tokens
     }
+
+    /// load array of test case from a .ron file
+    fn load_test_cases(path: &Path) -> Vec<test_case> {
+        let mut file = File::open(path).expect("Fail to open file.");
+        use ron::de::from_reader;
+        let ret: Vec<test_case> = from_reader(file).expect("Wrong format");
+        ret
+    }
+    /// for test_case_S in *.ron file
+    #[derive(Serialize, Deserialize)]
+    pub struct test_case {
+        pub src: String,
+        pub tokens: Vec<(Kind, String)>,
+        pub cst: CSTNode
+    }
     /// for ser to ron
-    #[derive(Serialize)]
-    enum CSTNodeOrToken {
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    pub enum CSTNodeOrToken {
         CSTNode(CSTNode),
         CSTToken(CSTToken),
     }
-    #[derive(Serialize)]
-    struct CSTNode {
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    pub struct CSTNode {
         node: String,
         childs: Vec<CSTNodeOrToken>,
     }
-    #[derive(Serialize)]
-    struct CSTToken {
-        kind: String,
-        text: String,
-    }
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+    pub struct CSTToken(String, String);
     /// serialize cst to a simpler `ron` form
     fn ser_cst(node: &SyntaxNode, text: &str) -> CSTNode {
         let first = format!("{:?}", node);
@@ -676,7 +698,7 @@ mod tests {
                         )
                         .unwrap()
                     );
-                    let token = CSTToken { kind, text };
+                    let token = CSTToken(kind, text);
                     ret.childs.push(CSTNodeOrToken::CSTToken(token));
                 }
             })
@@ -747,9 +769,7 @@ mod tests {
     /// standard operation producure for test parser
     ///
     /// take input `text` and a top-down parse function `f`
-    fn test_sop<F>(text: &str, f: F, tab: &str) -> String
-    where
-        F: Fn(&mut Parser),
+    fn test_sop(text: &str, f: fn(&mut Parser), tab: &str) -> String
     {
         use ron::ser::{to_string, to_string_pretty, PrettyConfig};
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
@@ -782,30 +802,76 @@ mod tests {
         print!("CST:\n{}\n", res);
         res
     }
+
+    #[test]
+    fn test_integrate(){
+        let text = "const int ARM = 1;";
+        let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
+        println!("Tokens:{:?}", tokens);
+        let parse = Parser::new(tokens).parse();
+        let node = parse.syntax();
+        println!("Errors:{:?}", parse.errors);
+        let mut out  = String::new();
+        output_cst(&node, 0, text, &mut out, "│");
+        println!("CST:{}", out);
+    }
     #[test]
     fn test_syntax_node_ser() {
-        let text = "{
-            print(hello);
-        }";
+        let text = "print(hello);";
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
         let mut parser = Parser::new(tokens);
-        parser.block();
+        parser.stmt();
         let res = Parse {
             green_node: parser.builder.finish(),
             errors: parser.errors,
         };
         let node = res.syntax();
-        println!("{:?}", node);
     }
-    #[test]
-    fn test_block() {
+    fn test_case_sop(sub_method: fn(&mut Parser), path_to_test_cases: &Path) {
+        use ron::ser::{to_string, to_string_pretty, PrettyConfig};
+        let pretty = PrettyConfig::new()
+            .separate_tuple_members(false)
+            .enumerate_arrays(true);
         println!("Test 1");
         // test LeftValue-> Ident
-        let text = "{
-                print(hello);
-                a[0] = b[1];
-            }";
-        let res = test_sop(text, Parser::block, "|");
+        let test_cases = load_test_cases(path_to_test_cases);
+        for test_case in test_cases {
+            let text = test_case.src;
+            let token_stream = test_case.tokens;
+            let exp_cst = test_case.cst;
+            let tokens: Vec<(Kind, String)> = lex_into_tokens(&text);
+            // print out real tokens
+            let pretty = PrettyConfig::new()
+                .depth_limit(2)
+                .separate_tuple_members(false)
+                .enumerate_arrays(true);
+            println!(
+                "Sered tokens: {}",
+                to_string_pretty(&tokens, pretty).unwrap()
+            );
+            let mut parser = Parser::new(tokens);
+            sub_method(&mut parser);
+            let res = Parse {
+                green_node: parser.builder.finish(),
+                errors: parser.errors,
+            };
+            let node = res.syntax();
+            let real_cst = ser_cst(&node, &text);
+            let pretty = PrettyConfig::new()
+                .indentor("│".to_string())
+                .separate_tuple_members(false)
+                .enumerate_arrays(true);
+            println!(
+                "Real CST:{}",
+                to_string_pretty(&real_cst, pretty.to_owned()).unwrap()
+            );
+            assert_eq!(real_cst, exp_cst);
+        }
+        //println!("Expected CST:{}", to_string_pretty(&exp_cst, pretty.to_owned()).unwrap());
+    }
+    #[test]
+    fn test_case_block(){
+        test_case_sop(Parser::block, Path::new("test_cases/cst/block.ron"));
     }
     #[test]
     fn test_unary_exp() {
