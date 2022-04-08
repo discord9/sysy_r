@@ -12,7 +12,7 @@ use rowan::GreenNodeBuilder;
 pub struct Parse {
     green_node: GreenNode,
     #[allow(unused)]
-    errors: Vec<String>,
+    pub errors: Vec<String>,
 }
 
 /// To work with the parse results we need a view into the
@@ -28,7 +28,7 @@ pub type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 impl Parse {
     /// view from SyntaxNode root
-    fn syntax(&self) -> SyntaxNode {
+    pub fn syntax(&self) -> SyntaxNode {
         SyntaxNode::new_root(self.green_node.clone())
     }
 }
@@ -210,7 +210,9 @@ impl Parser {
         for e in expected {
             self.bump_expect(e, format!("Expect {}", String::from(e)).as_str());
         }
-        self.func_formal_params();
+        if self.current() != Some(Kind::RParen){
+            self.func_formal_params();
+        }
         self.bump_expect(Kind::RParen, "Expect `)`");
         self.block();
         self.builder.finish_node();

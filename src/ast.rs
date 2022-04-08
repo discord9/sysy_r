@@ -116,36 +116,81 @@ pub enum CSTNodeOrToken {
     Token(Kind, String),
 }
 
+/// see if it is a whitespace or comment
+fn is_ws_cmt(kind: Kind) -> bool {
+    kind == Kind::Whitespace || kind == Kind::Comment
+}
+
 /// transform a syntaxNode tree into a rusty object notion style simpler tree
-fn into_ron_tree(node: &SyntaxNode, text: &str) -> CSTNodeOrToken {
+fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrToken {
     let kind = node.kind();
     //let mut ret = CSTNodeOrToken::Node(kind, Vec::new());
     let mut child_elem: Vec<CSTNodeOrToken> = Vec::new();
     node.children_with_tokens()
         .map(|child| {
             match child {
-                SyntaxElement::Node(node) => child_elem.push(into_ron_tree(&node, text)),
+                SyntaxElement::Node(node) => child_elem.push(into_ron_tree(&node, text, true)),
                 SyntaxElement::Token(token) => {
-                    let content = text.get(
-                        token.text_range().start().into()..token.text_range().end().into()
-                    ).unwrap();
+                    let content = text
+                        .get(token.text_range().start().into()..token.text_range().end().into())
+                        .unwrap();
+                    // if skip ws then dont push
+                    if skip_ws_cmt && is_ws_cmt(token.kind()) {
+                        return;
+                    }
                     child_elem.push(CSTNodeOrToken::Token(token.kind(), content.to_string()));
                 }
             };
         })
         .count();
-    unimplemented!()
+    let ret = CSTNodeOrToken::Node(kind, child_elem);
+    ret
 }
 
 /// given a Exp in CST, return AST
 ///
 /// `text` is the source code
-fn parse_exp(node: SyntaxNode, text: &str) -> Exp {
+/// TODO: change it to use simple ron style CST
+fn parse_exp(node: CSTNodeOrToken, text: &str) -> Exp {
     use either::{Left, Right};
-    let node_kind = node.kind();
-    let mut cur_node = node;
+    if let CSTNodeOrToken::Node(node_kind, child_elem) = node {
+        let mut cur = &child_elem;
+        loop {
+            let child_cnt = child_elem.len();
+            if child_cnt != 1 {
+                break;
+            }
+            match child_elem.get(0).unwrap(){
+                CSTNodeOrToken::Node(kind, child_elem) => {
+                    cur = child_elem;
+                }
+                CSTNodeOrToken::Token(kind, content) => {
+                    // 一脉单传抵达一个token，说明整个树可以简化为一个token
+                // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
+                match kind {
+                    Kind::Ident => {
+                        let ret = Exp::Name(content.to_owned());
+                        return ret;
+                    }
+                    Kind::IntConst => {
+                        let val = content.parse::<i32>().unwrap();
+                        let ret = Exp::Constant(Left(val));
+                        return ret;
+                    }
+                    Kind::FloatConst => {
+                        let val = content.parse::<f32>().unwrap();
+                        let ret = Exp::Constant(Right(val));
+                        return ret;
+                    }
+                    _ => (),
+                }
+                }
+            }
+        }
+    }
     // go all the way deeper until there is a token or there is more than one child
     // for simpler tree
+    /*
     loop {
         let child_count = cur_node.children_with_tokens().count();
         if child_count != 1 {
@@ -180,12 +225,28 @@ fn parse_exp(node: SyntaxNode, text: &str) -> Exp {
                 }
             }
         }
-    }
-    match node_kind {
-        Kind::IntConst => {
-            //let ret = Exp::Constant(Left())
-        }
-        _ => (),
-    }
+    }*/
     unimplemented!()
+}
+
+#[test]
+fn test_integrate() {
+    use crate::cst::parse;
+    use crate::lex::lex;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let text = "
+        int main(){
+            1+2*3;
+        }";
+    let parse = parse(text);
+    let node = parse.syntax();
+    let res = into_ron_tree(&node, text, true);
+    println!("Errors:{:?}", parse.errors);
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!("Ron Tree:\n{}", to_string_pretty(&res, pretty).unwrap());
+    //let mut out  = String::new();
+    //output_cst(&node, 0, text, &mut out, "│");
+    //println!("CST:{}", out);
 }
