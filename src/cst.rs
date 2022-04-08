@@ -75,7 +75,7 @@ impl Parser {
     fn new(mut tokens: Vec<(SyntaxKind, String)>) -> Self {
         tokens.reverse();
         Parser {
-            tokens: tokens,
+            tokens,
             builder: GreenNodeBuilder::new(),
             errors: Vec::new(),
         }
@@ -109,7 +109,7 @@ impl Parser {
                         String::from(expected),
                         String::from(out)
                     );
-                    std_err_msg.push_str(&err_msg);
+                    std_err_msg.push_str(err_msg);
                     self.push_err(std_err_msg.as_str());
                 }
             }

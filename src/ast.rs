@@ -21,8 +21,8 @@ macro_rules! ast_node {
     };
 }
 
-struct comp_unit(SyntaxNode);
-impl comp_unit{
+struct CompUnit(SyntaxNode);
+impl CompUnit{
     #[allow(unused)]
     fn cast(node: SyntaxNode) -> Option<Self> {
         if node.kind() == Kind::CompUnit {
