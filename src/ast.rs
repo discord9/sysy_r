@@ -111,15 +111,15 @@ enum Exp {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-enum IntOrFloat{
+enum IntOrFloat {
     Int(i32),
-    Float(f32)
+    Float(f32),
 }
-
+use std::ops::Range;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum CSTNodeOrToken {
-    Node(Kind, Vec<CSTNodeOrToken>),
-    Token(Kind, String),
+    Node(Kind, Range<usize>, Vec<CSTNodeOrToken>),
+    Token(Kind, Range<usize>, String),
 }
 
 /// see if it is a whitespace or comment
@@ -144,12 +144,20 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
                     if skip_ws_cmt && is_ws_cmt(token.kind()) {
                         return;
                     }
-                    child_elem.push(CSTNodeOrToken::Token(token.kind(), content.to_string()));
+                    let range = token.text_range();
+                    let range: Range<usize> = (range.start().into()..range.end().into());
+                    child_elem.push(CSTNodeOrToken::Token(
+                        token.kind(),
+                        range,
+                        content.to_string(),
+                    ));
                 }
             };
         })
         .count();
-    let ret = CSTNodeOrToken::Node(kind, child_elem);
+    let range = node.text_range();
+    let range: Range<usize> = (range.start().into()..range.end().into());
+    let ret = CSTNodeOrToken::Node(kind, range, child_elem);
     ret
 }
 
@@ -159,7 +167,7 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
 /// TODO: change it to use simple ron style CST
 fn parse_exp(node: CSTNodeOrToken) -> Exp {
     use either::{Left, Right};
-    if let CSTNodeOrToken::Node(node_kind, child_elem) = node {
+    if let CSTNodeOrToken::Node(node_kind,_, child_elem) = node {
         let mut cur = &child_elem;
         loop {
             let child_cnt = cur.len();
@@ -167,10 +175,10 @@ fn parse_exp(node: CSTNodeOrToken) -> Exp {
                 break;
             }
             match cur.get(0).unwrap() {
-                CSTNodeOrToken::Node(kind, child_elem) => {
+                CSTNodeOrToken::Node(kind,_, child_elem) => {
                     cur = child_elem;
                 }
-                CSTNodeOrToken::Token(kind, content) => {
+                CSTNodeOrToken::Token(kind,_, content) => {
                     // 一脉单传抵达一个token，说明整个树可以简化为一个token
                     // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
                     match kind {
@@ -200,7 +208,7 @@ fn parse_exp(node: CSTNodeOrToken) -> Exp {
 }
 use std::fs::File;
 use std::path::Path;
-fn load_test_cases(path: &Path) -> CSTNodeOrToken{
+fn load_test_cases(path: &Path) -> CSTNodeOrToken {
     let mut file = File::open(path).expect("Fail to open file.");
     use ron::de::from_reader;
     let ret: CSTNodeOrToken = from_reader(file).expect("Wrong format");
@@ -209,7 +217,7 @@ fn load_test_cases(path: &Path) -> CSTNodeOrToken{
 
 /// test CST -> AST case of AddExp(MulExp(UnaryExp(PrimaryExp(Number(IntConst(1)))))) to Constant(1) function
 #[test]
-fn test_single_exp(){
+fn test_single_exp() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let res = load_test_cases(Path::new("test_cases/ast/single_exp.ron"));
     let pretty = PrettyConfig::new()

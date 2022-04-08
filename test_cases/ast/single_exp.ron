@@ -1,13 +1,34 @@
-Node(Expression, [
-    Node(AddExp, [
-        Node(MulExp, [
-            Node(UnaryExp, [
-                Node(PrimaryExp, [
-                    Node(Number, [
-                        Token(IntConst, "1"),
+Node(Expression, (
+        start: 20,
+        end: 38,
+    ), [
+        Node(AddExp, (
+            start: 20,
+            end: 38,
+        ), [
+            Node(MulExp, (
+                start: 20,
+                end: 34,
+            ), [
+                Node(UnaryExp, (
+                    start: 20,
+                    end: 34,
+                ), [
+                    Node(PrimaryExp, (
+                        start: 20,
+                        end: 34,
+                    ), [
+                        Node(Number, (
+                            start: 20,
+                            end: 34,
+                        ), [
+                            Token(IntConst, (
+                                start: 33,
+                                end: 34,
+                            ), "1"),
+                        ]),
                     ]),
                 ]),
-            ]),
+            ]),// [0]
         ]),
     ])
-])
