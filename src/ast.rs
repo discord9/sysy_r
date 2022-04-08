@@ -101,13 +101,19 @@ enum Exp {
         comparators: Vec<Exp>,
     },
     /// int or float
-    Constant(Either<i32, f32>),
+    Constant(IntOrFloat),
     /// Ident
     Name(String),
     Subscript {
         value: Box<Exp>,
         slice: Box<Exp>,
     },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum IntOrFloat{
+    Int(i32),
+    Float(f32)
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -151,84 +157,72 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
 ///
 /// `text` is the source code
 /// TODO: change it to use simple ron style CST
-fn parse_exp(node: CSTNodeOrToken, text: &str) -> Exp {
+fn parse_exp(node: CSTNodeOrToken) -> Exp {
     use either::{Left, Right};
     if let CSTNodeOrToken::Node(node_kind, child_elem) = node {
         let mut cur = &child_elem;
         loop {
-            let child_cnt = child_elem.len();
+            let child_cnt = cur.len();
             if child_cnt != 1 {
                 break;
             }
-            match child_elem.get(0).unwrap(){
+            match cur.get(0).unwrap() {
                 CSTNodeOrToken::Node(kind, child_elem) => {
                     cur = child_elem;
                 }
                 CSTNodeOrToken::Token(kind, content) => {
                     // 一脉单传抵达一个token，说明整个树可以简化为一个token
-                // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
-                match kind {
-                    Kind::Ident => {
-                        let ret = Exp::Name(content.to_owned());
-                        return ret;
+                    // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
+                    match kind {
+                        Kind::Ident => {
+                            let ret = Exp::Name(content.to_owned());
+                            return ret;
+                        }
+                        Kind::IntConst => {
+                            let val = content.parse::<i32>().unwrap();
+                            let ret = Exp::Constant(IntOrFloat::Int(val));
+                            return ret;
+                        }
+                        Kind::FloatConst => {
+                            let val = content.parse::<f32>().unwrap();
+                            let ret = Exp::Constant(IntOrFloat::Float(val));
+                            return ret;
+                        }
+                        _ => (),
                     }
-                    Kind::IntConst => {
-                        let val = content.parse::<i32>().unwrap();
-                        let ret = Exp::Constant(Left(val));
-                        return ret;
-                    }
-                    Kind::FloatConst => {
-                        let val = content.parse::<f32>().unwrap();
-                        let ret = Exp::Constant(Right(val));
-                        return ret;
-                    }
-                    _ => (),
-                }
                 }
             }
         }
     }
     // go all the way deeper until there is a token or there is more than one child
     // for simpler tree
-    /*
-    loop {
-        let child_count = cur_node.children_with_tokens().count();
-        if child_count != 1 {
-            break;
-        }
-        match cur_node.children_with_tokens().next().unwrap() {
-            SyntaxElement::Node(node) => {
-                cur_node = node;
-            }
-            SyntaxElement::Token(token) => {
-                // 一脉单传抵达一个token，说明整个树可以简化为一个token
-                // for exp, only Ident(LVal), Number is possible to be the leaf of such tree
-                let content = text
-                    .get(token.text_range().start().into()..token.text_range().end().into())
-                    .unwrap();
-                match token.kind() {
-                    Kind::Ident => {
-                        let ret = Exp::Name(content.to_owned());
-                        return ret;
-                    }
-                    Kind::IntConst => {
-                        let val = content.parse::<i32>().unwrap();
-                        let ret = Exp::Constant(Left(val));
-                        return ret;
-                    }
-                    Kind::FloatConst => {
-                        let val = content.parse::<f32>().unwrap();
-                        let ret = Exp::Constant(Right(val));
-                        return ret;
-                    }
-                    _ => (),
-                }
-            }
-        }
-    }*/
     unimplemented!()
 }
+use std::fs::File;
+use std::path::Path;
+fn load_test_cases(path: &Path) -> CSTNodeOrToken{
+    let mut file = File::open(path).expect("Fail to open file.");
+    use ron::de::from_reader;
+    let ret: CSTNodeOrToken = from_reader(file).expect("Wrong format");
+    ret
+}
 
+/// test CST -> AST case of AddExp(MulExp(UnaryExp(PrimaryExp(Number(IntConst(1)))))) to Constant(1) function
+#[test]
+fn test_single_exp(){
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/single_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(res);
+    println!("AST:\n{:?}", exp);
+    assert_eq!(format!("{:?}", exp), "Constant(Int(1))".trim());
+}
 #[test]
 fn test_integrate() {
     use crate::cst::parse;
@@ -245,7 +239,11 @@ fn test_integrate() {
     let pretty = PrettyConfig::new()
         .separate_tuple_members(false)
         .enumerate_arrays(true);
-    println!("Ron Tree:\n{}", to_string_pretty(&res, pretty).unwrap());
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+
     //let mut out  = String::new();
     //output_cst(&node, 0, text, &mut out, "│");
     //println!("CST:{}", out);

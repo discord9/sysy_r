@@ -1,0 +1,31 @@
+Node(Expression, [
+    Node(AddExp, [
+        Node(MulExp, [
+            Node(UnaryExp, [
+                Node(PrimaryExp, [
+                    Node(Number, [
+                        Token(IntConst, "1"),
+                    ]),
+                ]),
+            ]),
+        ]),// [0]
+        Token(OpAdd, "+"),// [1]
+        Node(MulExp, [
+            Node(UnaryExp, [
+                Node(PrimaryExp, [
+                    Node(Number, [
+                        Token(IntConst, "2"),
+                    ]),
+                ]),
+            ]),// [0]
+            Token(OpMul, "*"),// [1]
+            Node(UnaryExp, [
+                Node(PrimaryExp, [
+                    Node(Number, [
+                        Token(IntConst, "3"),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ]),
+])
