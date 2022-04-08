@@ -1,6 +1,8 @@
 //! Concrete Syntax Tree
 //!
 //! Losslessly concrete syntax tree using rowan
+#![allow(unused)]
+
 use crate::syntax::{Lang, SyntaxKind};
 
 use rowan::GreenNode;
@@ -132,7 +134,7 @@ impl Parser {
 
     /// Peek ahead and skip whitespace and comment
     fn peek_skip(&self, ahead: usize) -> Option<Kind> {
-        if self.tokens.len() == 0 {
+        if self.tokens.is_empty() {
             return None;
         };
         let mut idx = self.tokens.len() - 1;
@@ -290,12 +292,9 @@ impl Parser {
                 let mut ahead = 0;
                 // TODO: better predicate
                 while self.peek_skip(ahead) != Some(Semicolon) {
-                    match self.peek_skip(ahead) {
-                        Some(OpAsg) => {
-                            flag = true;
-                            break;
-                        }
-                        _ => (),
+                    if let Some(OpAsg) = self.peek_skip(ahead) {
+                        flag = true;
+                        break;
                     }
                     ahead += 1;
                 }
@@ -769,7 +768,7 @@ mod tests {
     /// standard operation producure for test parser
     ///
     /// take input `text` and a top-down parse function `f`
-    fn test_sop(text: &str, f: fn(&mut Parser), tab: &str) -> String
+    fn test_sop(text: &str, f: fn(&mut Parser), tab: &str, no_errors: bool) -> String
     {
         use ron::ser::{to_string, to_string_pretty, PrettyConfig};
         let tokens: Vec<(Kind, String)> = lex_into_tokens(text);
@@ -794,6 +793,9 @@ mod tests {
         let node = res.syntax();
         if !res.errors.is_empty() {
             println!("{:?}", res.errors);
+            if no_errors{
+                panic!("Found errors, expect no errors:{:?}.", res.errors);
+            }
         }
         let ret = ser_cst(&node, text);
         println!("{}", to_string_pretty(&ret, pretty).unwrap());
@@ -841,6 +843,7 @@ mod tests {
         };
         let node = res.syntax();
     }
+    /// Standard opeartion  procodure of using .ron test case config file
     fn test_case_sop(sub_method: fn(&mut Parser), path_to_test_cases: &Path) {
         use ron::ser::{to_string, to_string_pretty, PrettyConfig};
         let pretty = PrettyConfig::new()
@@ -892,7 +895,7 @@ mod tests {
         println!("Test 1");
         // test LeftValue-> Ident
         let text = " print ( hello )";
-        let res = test_sop(text, Parser::unary_exp, "|");
+        let res = test_sop(text, Parser::unary_exp, "|", true);
     }
     #[test]
     fn test_peek_skip() {
@@ -922,7 +925,7 @@ mod tests {
             let text = "void/*aaaa */ main/* strange world indeed */(int /* strange world indeed */args, int/* strange world indeed */ argv[]){
                 print(hello);
             }";
-            let res = test_sop(text, Parser::func_def, "|");
+            let res = test_sop(text, Parser::func_def, "|", true);
         }
     }
     #[test]
@@ -931,7 +934,7 @@ mod tests {
             println!("Test 1");
             // test LeftValue-> Ident
             let text = "a[0]=b[1];";
-            let res = test_sop(text, Parser::stmt, "-");
+            let res = test_sop(text, Parser::stmt, "-", true);
             assert_eq!(
                 r#"
 Statement@0..10
@@ -972,7 +975,7 @@ Statement@0..10
             println!("Test 2");
             // test LeftValue-> Ident
             let text = "b[1];";
-            let res = test_sop(text, Parser::stmt, "-");
+            let res = test_sop(text, Parser::stmt, "-", true);
             assert_eq!(
                 r#"
 Statement@0..5
@@ -1005,7 +1008,7 @@ Statement@0..5
             println!("Test 1");
             // test LeftValue-> Ident
             let text = "abc123";
-            let res = test_sop(text, Parser::left_value, "    ");
+            let res = test_sop(text, Parser::left_value, "    ", true);
             assert_eq!(
                 r#"LeftValue@0..6
     Ident@0..6 "abc123"
@@ -1018,7 +1021,7 @@ Statement@0..5
             println!("Test 2");
             // test PrimaryExp -> LVal|Number
             let text = "abc123";
-            let res = test_sop(text, Parser::primary_exp, "    ");
+            let res = test_sop(text, Parser::primary_exp, "    ", true);
             assert_eq!(
                 r#"PrimaryExp@0..6
     LeftValue@0..6
@@ -1032,7 +1035,7 @@ Statement@0..5
             println!("Test 3");
             // UnaryExp -> PrimaryExp
             let text = "abc123";
-            let res = test_sop(text, Parser::unary_exp, "    ");
+            let res = test_sop(text, Parser::unary_exp, "    ", true);
             assert_eq!(
                 r#"UnaryExp@0..6
     PrimaryExp@0..6
@@ -1046,7 +1049,7 @@ Statement@0..5
         {
             println!("Test 4");
             let text = "abc123()";
-            let res = test_sop(text, Parser::unary_exp, "    ");
+            let res = test_sop(text, Parser::unary_exp, "    ", true);
             // UnaryExp ->  Ident (FuncRParams)
             assert_eq!(
                 r#"UnaryExp@0..8
@@ -1061,7 +1064,7 @@ Statement@0..5
         {
             println!("Test 5");
             let text = "-+!1";
-            let res = test_sop(text, Parser::unary_exp, "    ");
+            let res = test_sop(text, Parser::unary_exp, "    ", true);
             // UnaryExp ->  UnaryOp UnaryExp
             assert_eq!(
                 r#"
@@ -1083,7 +1086,7 @@ UnaryExp@0..4
         {
             println!("Test 6");
             let text = "1*2*3";
-            let res = test_sop(text, Parser::mul_exp, "    ");
+            let res = test_sop(text, Parser::mul_exp, "    ", true);
             // UnaryExp ->  UnaryOp UnaryExp
             assert_eq!(
                 r#"
@@ -1110,7 +1113,7 @@ MulExp@0..5
         {
             println!("Test 7");
             let text = "-1*0+1<2==1<3&&2||3&&4";
-            let res = test_sop(text, Parser::logic_or_exp, "-");
+            let res = test_sop(text, Parser::logic_or_exp, "-", true);
             assert_eq!(
                 r#"
 LogicOrExp@0..22
