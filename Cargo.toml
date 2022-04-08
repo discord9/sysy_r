@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+either = {version = "1.6.1", features = ["serde"]}
 lexgen = "0.10.0"
 lexgen_util = "0.10.0"
 proptest = "1.0.0"
