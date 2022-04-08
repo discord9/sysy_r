@@ -1,0 +1,14 @@
+Node(AddExp, [
+              Node(MulExp, [
+                Node(UnaryExp, [
+                  Token(OpSub, "-"),// [0]
+                  Node(UnaryExp, [
+                    Node(PrimaryExp, [
+                      Node(Number, [
+                        Token(IntConst, "1"),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ])
+])

@@ -1,7 +1,8 @@
 //! Abstract Syntax Tree
 //!
+//! TODO: Add Range for AST node
 #![allow(unused)]
-use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
+use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken, parse};
 use crate::syntax::SyntaxKind as Kind;
 use either::Either;
 use serde::{Deserialize, Serialize};
@@ -48,13 +49,16 @@ struct FuncFParam {
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct Block {
-    items: Option<Vec<BlockItem>>,
+    items: Option<Vec<(BlockItem)>>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct BlockItem(Either<Decl, Statement>);
 #[derive(Serialize, Deserialize, Debug)]
 enum Statement {
-    Assign,
+    Assign {
+        target: Box<Exp>,
+        value: Box<Exp>,
+    },
     Exp,
     Block,
     IfStmt {
@@ -71,12 +75,8 @@ enum Statement {
     ReturnStmt(Option<Exp>),
 }
 /// merge all *Exp into one. is it wise?NO, but as a enum with all possible variant? YESYES
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum Exp {
-    Assign {
-        target: Box<Exp>,
-        value: Box<Exp>,
-    },
     Call {
         id: String,
         args: Vec<Exp>,
@@ -110,7 +110,7 @@ enum Exp {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum IntOrFloat {
     Int(i32),
     Float(f32),
@@ -118,8 +118,8 @@ enum IntOrFloat {
 use std::ops::Range;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum CSTNodeOrToken {
-    Node(Kind, Range<usize>, Vec<CSTNodeOrToken>),
-    Token(Kind, Range<usize>, String),
+    Node(Kind, Vec<CSTNodeOrToken>),
+    Token(Kind, String),
 }
 
 /// see if it is a whitespace or comment
@@ -144,20 +144,19 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
                     if skip_ws_cmt && is_ws_cmt(token.kind()) {
                         return;
                     }
-                    let range = token.text_range();
-                    let range: Range<usize> = (range.start().into()..range.end().into());
+                    //let _range = token.text_range();
+                    //let _range: Range<usize> = (range.start().into()..range.end().into());
                     child_elem.push(CSTNodeOrToken::Token(
                         token.kind(),
-                        range,
                         content.to_string(),
                     ));
                 }
             };
         })
         .count();
-    let range = node.text_range();
-    let range: Range<usize> = (range.start().into()..range.end().into());
-    let ret = CSTNodeOrToken::Node(kind, range, child_elem);
+    //let _range = node.text_range();
+    //let _range: Range<usize> = (range.start().into()..range.end().into());
+    let ret = CSTNodeOrToken::Node(kind, child_elem);
     ret
 }
 
@@ -165,20 +164,20 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
 ///
 /// `text` is the source code
 /// TODO: change it to use simple ron style CST
-fn parse_exp(node: CSTNodeOrToken) -> Exp {
-    use either::{Left, Right};
-    if let CSTNodeOrToken::Node(node_kind,_, child_elem) = node {
-        let mut cur = &child_elem;
+fn parse_exp(node: &CSTNodeOrToken) -> Exp {
+    if let CSTNodeOrToken::Node(node_kind, child_vec) = node {
+        let (mut cur_node_kind, mut cur_child_vec) = (node_kind, child_vec);
         loop {
-            let child_cnt = cur.len();
+            let child_cnt = cur_child_vec.len();
             if child_cnt != 1 {
                 break;
             }
-            match cur.get(0).unwrap() {
-                CSTNodeOrToken::Node(kind,_, child_elem) => {
-                    cur = child_elem;
+            match cur_child_vec.get(0).unwrap() {
+                CSTNodeOrToken::Node(kind, child_elem) => {
+                    (cur_node_kind, cur_child_vec) = (kind, child_elem);
+                    //cur_child_vec = child_elem;
                 }
-                CSTNodeOrToken::Token(kind,_, content) => {
+                CSTNodeOrToken::Token(kind, content) => {
                     // 一脉单传抵达一个token，说明整个树可以简化为一个token
                     // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
                     match kind {
@@ -201,6 +200,15 @@ fn parse_exp(node: CSTNodeOrToken) -> Exp {
                 }
             }
         }
+        match *cur_node_kind{
+            Kind::UnaryExp => {// UnaryOp UnaryExp
+                if let CSTNodeOrToken::Token(op, _)  = cur_child_vec.get(0).unwrap(){
+                    let val = parse_exp(cur_child_vec.get(1).unwrap());
+                    return Exp::UnaryOp { op: *op, val: Box::new(val) }
+                }
+            },
+            _ => ()
+        }
     }
     // go all the way deeper until there is a token or there is more than one child
     // for simpler tree
@@ -215,6 +223,28 @@ fn load_test_cases(path: &Path) -> CSTNodeOrToken {
     ret
 }
 
+
+#[test]
+fn test_unary_exp() {
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    use ron::de::from_str;
+    let res = load_test_cases(Path::new("test_cases/ast/unary_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!("AST:\n{}", to_string_pretty(&exp, pretty.to_owned()).unwrap());
+    let res:Exp = from_str("UnaryOp(
+        op: OpSub,
+        val: Constant(Int(1)),
+    )").expect("Wrong format");
+    assert_eq!(exp, res);
+}
+
 /// test CST -> AST case of AddExp(MulExp(UnaryExp(PrimaryExp(Number(IntConst(1)))))) to Constant(1) function
 #[test]
 fn test_single_exp() {
@@ -227,7 +257,7 @@ fn test_single_exp() {
         "Ron Tree:\n{}",
         to_string_pretty(&res, pretty.to_owned()).unwrap()
     );
-    let exp = parse_exp(res);
+    let exp = parse_exp(&res);
     println!("AST:\n{:?}", exp);
     assert_eq!(format!("{:?}", exp), "Constant(Int(1))".trim());
 }
@@ -238,7 +268,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            1+2*3;
+            -1+2*3;
         }";
     let parse = parse(text);
     let node = parse.syntax();
@@ -246,6 +276,7 @@ fn test_integrate() {
     println!("Errors:{:?}", parse.errors);
     let pretty = PrettyConfig::new()
         .separate_tuple_members(false)
+        .indentor("  ".to_string())
         .enumerate_arrays(true);
     println!(
         "Ron Tree:\n{}",

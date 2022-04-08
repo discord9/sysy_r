@@ -1,138 +1,48 @@
-Node(CompUnit, (
-    start: 0,
-    end: 49,
-), [
-    Node(FuncDef, (
-        start: 0,
-        end: 49,
-    ), [
-        Token(BType, (
-            start: 9,
-            end: 12,
-        ), "int"),// [0]
-        Token(Ident, (
-            start: 13,
-            end: 17,
-        ), "main"),// [1]
-        Token(LParen, (
-            start: 17,
-            end: 18,
-        ), "("),// [2]
-        Token(RParen, (
-            start: 18,
-            end: 19,
-        ), ")"),// [3]
-        Node(Block, (
-            start: 19,
-            end: 49,
-        ), [
-            Token(LCurly, (
-                start: 19,
-                end: 20,
-            ), "{"),// [0]
-            Node(BlockItem, (
-                start: 20,
-                end: 39,
-            ), [
-                Node(Statement, (
-                    start: 20,
-                    end: 39,
-                ), [
-                    Node(Expression, (
-                        start: 20,
-                        end: 38,
-                    ), [
-                        Node(AddExp, (
-                            start: 20,
-                            end: 38,
-                        ), [
-                            Node(MulExp, (
-                                start: 20,
-                                end: 34,
-                            ), [
-                                Node(UnaryExp, (
-                                    start: 20,
-                                    end: 34,
-                                ), [
-                                    Node(PrimaryExp, (
-                                        start: 20,
-                                        end: 34,
-                                    ), [
-                                        Node(Number, (
-                                            start: 20,
-                                            end: 34,
-                                        ), [
-                                            Token(IntConst, (
-                                                start: 33,
-                                                end: 34,
-                                            ), "1"),
-                                        ]),
-                                    ]),
-                                ]),
-                            ]),// [0]
-                            Token(OpAdd, (
-                                start: 34,
-                                end: 35,
-                            ), "+"),// [1]
-                            Node(MulExp, (
-                                start: 35,
-                                end: 38,
-                            ), [
-                                Node(UnaryExp, (
-                                    start: 35,
-                                    end: 36,
-                                ), [
-                                    Node(PrimaryExp, (
-                                        start: 35,
-                                        end: 36,
-                                    ), [
-                                        Node(Number, (
-                                            start: 35,
-                                            end: 36,
-                                        ), [
-                                            Token(IntConst, (
-                                                start: 35,
-                                                end: 36,
-                                            ), "2"),
-                                        ]),
-                                    ]),
-                                ]),// [0]
-                                Token(OpMul, (
-                                    start: 36,
-                                    end: 37,
-                                ), "*"),// [1]
-                                Node(UnaryExp, (
-                                    start: 37,
-                                    end: 38,
-                                ), [
-                                    Node(PrimaryExp, (
-                                        start: 37,
-                                        end: 38,
-                                    ), [
-                                        Node(Number, (
-                                            start: 37,
-                                            end: 38,
-                                        ), [
-                                            Token(IntConst, (
-                                                start: 37,
-                                                end: 38,
-                                            ), "3"),
-                                        ]),
-                                    ]),
-                                ]),
-                            ]),
-                        ]),
-                    ]),// [0]
-                    Token(Semicolon, (
-                        start: 38,
-                        end: 39,
-                    ), ";"),
+Node(CompUnit, [
+  Node(FuncDef, [
+    Token(BType, "int"),// [0]
+    Token(Ident, "main"),// [1]
+    Token(LParen, "("),// [2]
+    Token(RParen, ")"),// [3]
+    Node(Block, [
+      Token(LCurly, "{"),// [0]
+      Node(BlockItem, [
+        Node(Statement, [
+          Node(Expression, [
+            Node(AddExp, [
+              Node(MulExp, [
+                Node(UnaryExp, [
+                  Node(PrimaryExp, [
+                    Node(Number, [
+                      Token(IntConst, "1"),
+                    ]),
+                  ]),
                 ]),
-            ]),// [1]
-            Token(RCurly, (
-                start: 48,
-                end: 49,
-            ), "}"),
+              ]),// [0]
+              Token(OpAdd, "+"),// [1]
+              Node(MulExp, [
+                Node(UnaryExp, [
+                  Node(PrimaryExp, [
+                    Node(Number, [
+                      Token(IntConst, "2"),
+                    ]),
+                  ]),
+                ]),// [0]
+                Token(OpMul, "*"),// [1]
+                Node(UnaryExp, [
+                  Node(PrimaryExp, [
+                    Node(Number, [
+                      Token(IntConst, "3"),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),// [0]
+          Token(Semicolon, ";"),
         ]),
+      ]),// [1]
+      Token(RCurly, "}"),
     ]),
+  ]),
 ])
