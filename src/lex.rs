@@ -19,10 +19,11 @@ pub fn lex(text: &str) -> Vec<(Loc, SyntaxKind, Loc)> {
         let hex_digit = ['a'-'f' 'A'-'F' '0'-'9'];
         let hex_prefix = "0x" | "0X";
         // original iso not include zero????
-        let int_const =  '0' | ['1'-'9']['0'-'9']* | 'o'['0'-'7']+ | $hex_prefix ['0' - '9' 'a' - 'f' 'A' - 'F']+;
+        let sign = '+' | '-';
+        let int_const =  ('0') |  ( ['1'-'9']['0'-'9']*) | 'o'['0'-'7']+ | $hex_prefix ['0' - '9' 'a' - 'f' 'A' - 'F']+;
 
         let frac_const = $digit* '.' $digit+ | $digit+ '.';
-        let sign = '+' | '-';
+        
         let exp_part = 'e'$sign? $digit+ | 'E'$sign? $digit+;
         let dec_float_const = $frac_const $exp_part? | $digit+ $exp_part;
 
