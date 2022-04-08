@@ -898,6 +898,20 @@ mod tests {
         let res = test_sop(text, Parser::unary_exp, "|", true);
     }
     #[test]
+    fn test_rel_eq_exp() {
+        println!("Test 1");
+        // test LeftValue-> Ident
+        let text = "1<2<3";
+        let res = test_sop(text, Parser::rel_exp, "|", true);
+    }
+    #[test]
+    fn test_add_exp() {
+        println!("Test 1");
+        // test LeftValue-> Ident
+        let text = "1+2+3";
+        let res = test_sop(text, Parser::add_exp, "|", true);
+    }
+    #[test]
     fn test_peek_skip() {
         println!("Test 1");
         // test LeftValue-> Ident
