@@ -1,0 +1,53 @@
+Node(Expression, [
+    Node(AddExp, [
+        Node(MulExp, [
+            Node(UnaryExp, [
+                Node(PrimaryExp, [
+                    Node(LeftValue, [
+                        Token(Ident, "a"),// [0]
+                        Token(LBracket, "["),// [1]
+                        Node(Expression, [
+                            Node(AddExp, [
+                                Node(MulExp, [
+                                    Node(UnaryExp, [
+                                        Node(PrimaryExp, [
+                                            Node(Number, [
+                                                Token(IntConst, "1"),
+                                            ]),
+                                        ]),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),// [2]
+                        Token(RBracket, "]"),// [3]
+                        Token(LBracket, "["),// [4]
+                        Node(Expression, [
+                            Node(AddExp, [
+                                Node(MulExp, [
+                                    Node(UnaryExp, [
+                                        Node(PrimaryExp, [
+                                            Node(Number, [
+                                                Token(IntConst, "2"),
+                                            ]),
+                                        ]),
+                                    ]),
+                                ]),// [0]
+                                Token(OpAdd, "+"),// [1]
+                                Node(MulExp, [
+                                    Node(UnaryExp, [
+                                        Node(PrimaryExp, [
+                                            Node(Number, [
+                                                Token(IntConst, "3"),
+                                            ]),
+                                        ]),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),// [5]
+                        Token(RBracket, "]"),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ]),
+])

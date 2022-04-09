@@ -1,0 +1,58 @@
+
+Node(Condition, [
+    Node(LogicOrExp, [
+        Node(LogicAndExp, [
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "1"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),// [0]
+                    Token(OpLT, "<"),// [1]
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "2"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),// [2]
+                    Token(OpGT, ">"),// [3]
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(FloatConst, "1.5"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),// [4]
+                    Token(OpNG, "<="),// [5]
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "4"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ]),
+])

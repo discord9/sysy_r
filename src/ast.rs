@@ -268,8 +268,100 @@ fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
     unreachable!()
 }
 
+/// parse bool exp
+fn parse_bool_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+    let mut op = None;
+    let mut args = Vec::new();
+    let mut expect_node = true; // ping-pong parse node and op token
+    for elem in cur_child_vec {
+        match elem {
+            CSTNodeOrToken::Node(kind, grandchilds) => {
+                args.push(parse_exp(elem));
+                assert_eq!(expect_node, true);
+                expect_node = false;
+            }
+            CSTNodeOrToken::Token(kind, _) => {
+                if op.is_none() {
+                    op = Some(*kind);
+                } else {
+                    assert_eq!(op, Some(*kind));
+                }
+                assert_eq!(expect_node, false);
+                expect_node = true;
+            }
+        }
+    }
+    Exp::BoolOp {
+        op: op.unwrap(),
+        args,
+    }
+}
+
+/// parse i.e. `a[1][2][3]`
+fn parse_subscript_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+    let mut cur_exp: Option<Exp> = None;
+    let mut cnt_pair = 0;
+    for elem in cur_child_vec {
+        match elem {
+            CSTNodeOrToken::Token(Kind::Ident, content) => {
+                if cur_exp.is_none() {
+                    cur_exp = Some(Exp::Name(content.to_owned()));
+                } else {
+                    unreachable!()
+                }
+            }
+            CSTNodeOrToken::Token(Kind::LBracket, _) => {
+                cnt_pair += 1;
+                assert_eq!(cnt_pair, 1);
+            } 
+            CSTNodeOrToken::Token(Kind::RBracket, _) => {
+                cnt_pair -= 1;
+                assert_eq!(cnt_pair, 0);
+            }
+            CSTNodeOrToken::Node(_, _) => {
+                let ret = parse_exp(elem);
+                cur_exp = Some(Exp::Subscript {
+                    value: Box::new(cur_exp.unwrap()),
+                    slice: Box::new(ret),
+                });
+            }
+            _ => unreachable!(),
+        }
+    }
+    cur_exp.unwrap()
+}
+/// parse compare exp
+fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+    let mut ops = Vec::new();
+    let mut left = None;
+    let mut comparators = Vec::new();
+    let mut expect_node = true; // ping-pong parse node and op token
+    for elem in cur_child_vec {
+        match elem {
+            CSTNodeOrToken::Node(kind, grandchilds) => {
+                if left.is_none() {
+                    left = Some(parse_exp(elem));
+                } else {
+                    comparators.push(parse_exp(elem));
+                }
+                assert_eq!(expect_node, true);
+                expect_node = false;
+            }
+            CSTNodeOrToken::Token(kind, _) => {
+                ops.push(*kind);
+                assert_eq!(expect_node, false);
+                expect_node = true;
+            }
+        }
+    }
+    Exp::CmpOp {
+        op: ops,
+        left: Box::new(left.unwrap()),
+        comparators,
+    }
+}
+
 /// parse binary exp in right associativity
-/// TODO: test it
 fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
     let mut left = None;
     let mut op = None;
@@ -348,12 +440,25 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
             // all deals in different way
             // BinOp: .... to right associtivity
             // TODO: test this arm
-            Kind::MulExp | Kind::AddExp => return parse_binary_exp_node(*cur_node_kind, cur_child_vec),
+            Kind::MulExp | Kind::AddExp => {
+                return parse_binary_exp_node(*cur_node_kind, cur_child_vec)
+            }
+
             // CmpOp: a array of op and exp
             // note eq and rel is separate in cst so should be seprarte in ast
-            Kind::RelationExp | Kind::EqExp => (),
+            // TODO:test
+            Kind::RelationExp | Kind::EqExp => {
+                return parse_compare_exp_node(*cur_node_kind, cur_child_vec)
+            }
             // BoolOp: a single op and a array of exp
-            Kind::LogicAndExp | Kind::LogicOrExp => {}
+            // TODO: test
+            Kind::LogicAndExp | Kind::LogicOrExp => {
+                return parse_bool_exp_node(*cur_node_kind, cur_child_vec)
+            }
+            Kind::LeftValue => {
+                // more than one child elems means subscript
+                return parse_subscript_exp_node(*cur_node_kind, cur_child_vec);
+            }
             _ => (),
         }
     }
@@ -369,6 +474,121 @@ fn load_test_cases(path: &Path) -> CSTNodeOrToken {
     let ret: CSTNodeOrToken = from_reader(file).expect("Wrong format");
     ret
 }
+
+#[test]
+fn test_subscript_exp() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/subscript.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+    let res: Exp = from_str(
+        r#"Subscript(
+            value: Subscript(
+                value: Name("a"),
+                slice: Constant(Int(1)),
+            ),
+            slice: BinOp(
+                op: OpAdd,
+                left: Constant(Int(2)),
+                right: Constant(Int(3)),
+            ),
+        )"#
+    )
+    .expect("Wrong format");
+    assert_eq!(exp, res);
+}
+
+#[test]
+fn test_logic_exp() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/logic_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+    let res: Exp = from_str(
+        "BoolOp(
+            op: OpOr,
+            args: [
+                BoolOp(
+                    op: OpAnd,
+                    args: [
+                        Constant(Int(1)),// [0]
+                        Constant(Int(2)),
+                    ],
+                ),// [0]
+                BoolOp(
+                    op: OpAnd,
+                    args: [
+                        Constant(Int(3)),// [0]
+                        Constant(Int(4)),// [1]
+                        Constant(Int(5)),
+                    ],
+                ),
+            ],
+        )",
+    )
+    .expect("Wrong format");
+    assert_eq!(exp, res);
+}
+
+
+#[test]
+fn test_compare_exp() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/cmp_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+    let res: Exp = from_str(
+        "CmpOp(
+            op: [
+                OpLT,// [0]
+                OpGT,// [1]
+                OpNG,
+            ],
+            left: Constant(Int(1)),
+            comparators: [
+                Constant(Int(2)),// [0]
+                Constant(Float(1.5)),// [1]
+                Constant(Int(4)),
+            ],
+        )",
+    )
+    .expect("Wrong format");
+    assert_eq!(exp, res);
+}
+
 
 #[test]
 fn test_binary_exp() {
@@ -387,7 +607,8 @@ fn test_binary_exp() {
         "AST:\n{}",
         to_string_pretty(&exp, pretty.to_owned()).unwrap()
     );
-    let res: Exp = from_str("
+    let res: Exp = from_str(
+        "
     BinOp(
         op: OpAdd,
         left: BinOp(
@@ -400,7 +621,9 @@ fn test_binary_exp() {
             left: Constant(Int(3)),
             right: Constant(Int(4)),
         ),
-    )").expect("Wrong format");
+    )",
+    )
+    .expect("Wrong format");
     assert_eq!(exp, res);
 }
 
@@ -475,7 +698,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            1+2+3*4;
+            a[1][2+3];
         }";
     let parse = parse(text);
     let node = parse.syntax();

@@ -1,0 +1,87 @@
+Node(Condition, [
+    Node(LogicOrExp, [
+        Node(LogicAndExp, [
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "1"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),// [0]
+            Token(OpAnd, "&&"),// [1]
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "2"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
+        ]),// [0]
+        Token(OpOr, "||"),// [1]
+        Node(LogicAndExp, [
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "3"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),// [0]
+            Token(OpAnd, "&&"),// [1]
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "4"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),// [2]
+            Token(OpAnd, "&&"),// [3]
+            Node(EqExp, [
+                Node(RelationExp, [
+                    Node(AddExp, [
+                        Node(MulExp, [
+                            Node(UnaryExp, [
+                                Node(PrimaryExp, [
+                                    Node(Number, [
+                                        Token(IntConst, "5"),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ]),
+])
