@@ -1074,7 +1074,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            if(1){2;}
+            continue;
         }";
     
     let parse = parse(text);

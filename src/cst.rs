@@ -105,15 +105,22 @@ impl Parser {
                     self.bump()
                 } else {
                     let mut std_err_msg = format!(
-                        "Expect {}, found {}. ",
-                        String::from(expected),
-                        String::from(out)
+                        "Expect `{:?}`, found `{:?}`. ",
+                        expected,
+                        out
                     );
                     std_err_msg.push_str(err_msg);
                     self.push_err(std_err_msg.as_str());
                 }
             }
-            _ => self.push_err(err_msg),
+            _ => {
+                let mut std_err_msg = format!(
+                    "Expect `{:?}`, found End of file. ",
+                    expected
+                );
+                std_err_msg.push_str(err_msg);
+                self.push_err(std_err_msg.as_str());
+            },
         }
     }
     /// Push a error node(BUG!)
@@ -253,9 +260,11 @@ impl Parser {
     }
     /// Block → '{' { BlockItem } '}'
     fn block(&mut self) {
+        #[cfg(test)]
+        println!("Call block() on {:?}", self.current());
         self.builder.start_node(SyntaxKind::Block.into());
         self.bump_expect(Kind::LCurly, "");
-        while Some(Kind::RCurly) != self.current() {
+        while Some(Kind::RCurly) != self.current()  && None != self.current(){
             self.block_item();
         }
         self.bump_expect(Kind::RCurly, "");
@@ -264,6 +273,8 @@ impl Parser {
 
     /// BlockItem → Decl | Stmt
     fn block_item(&mut self) {
+        #[cfg(test)]
+        println!("Call block_item() on {:?}", self.current());
         self.builder.start_node(SyntaxKind::BlockItem.into());
         match self.current() {
             Some(Kind::ConstKeyword) | Some(Kind::BType) => self.decl(),
@@ -281,6 +292,8 @@ impl Parser {
     ///
     /// | 'return' \[Exp\] ';'
     fn stmt(&mut self) {
+        #[cfg(test)]
+        println!("Call stmt() on {:?}", self.current());
         use Kind::{
             BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LCurly, LParen, OpAsg,
             RParen, ReturnKeyword, Semicolon, WhileKeyword,
@@ -293,7 +306,9 @@ impl Parser {
                 let mut flag = false;
                 let mut ahead = 0;
                 // TODO: better predicate
-                while self.peek_skip(ahead) != Some(Semicolon) {
+                // bugs in here!!! if no semicolon present will loop to eof!
+                while self.peek_skip(ahead) != Some(Semicolon)  && self.peek_skip(ahead)!= None{
+                    //println!("")
                     if let Some(OpAsg) = self.peek_skip(ahead) {
                         flag = true;
                         break;
@@ -340,12 +355,17 @@ impl Parser {
                 }
                 self.bump_expect(Semicolon, "");
             }
-
-            _ => {
-                if Some(Semicolon) != self.current() {
+            None => {
+                self.push_err("Unexpected end of file.");
+            }
+            Some(kind) => {
+                if matches!(kind, Kind::OpAdd | Kind::OpSub | Kind::OpNot | Kind::Ident | Kind::LParen | Kind::IntConst | Kind::FloatConst) {
                     self.exp();
                 }
                 self.bump_expect(Semicolon, "");
+            }
+            opt => {
+                self.push_err(format!("Unexpected token: {:?}",opt).as_str());
             }
         }
         self.builder.finish_node();
@@ -794,7 +814,7 @@ mod tests {
             .enumerate_arrays(true);
         let node = res.syntax();
         if !res.errors.is_empty() {
-            println!("{:?}", res.errors);
+            println!("Errors: {:?}", res.errors);
             if no_errors{
                 panic!("Found errors, expect no errors:{:?}.", res.errors);
             }
@@ -893,13 +913,11 @@ mod tests {
         test_case_sop(Parser::block, Path::new("test_cases/cst/block.ron"));
     }
     #[test]
-    fn test_unary_exp() {
+    fn test_error_input_block() {
         println!("Test 1");
         // test LeftValue-> Ident
-        let text = "int main(){
-            if(1){2;}
-        }";
-        let res = test_sop(text, Parser::comp_unit, "|", true);
+        let text = "{a}";
+        let res = test_sop(text, Parser::block, "|", false);
     }
     #[test]
     fn test_rel_eq_exp() {
