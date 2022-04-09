@@ -1,0 +1,25 @@
+Node(Expression, [
+    Node(AddExp, [
+        Node(MulExp, [
+            Node(UnaryExp, [
+                Node(PrimaryExp, [
+                    Token(LParen, "("),// [0]
+                    Node(Expression, [
+                        Node(AddExp, [
+                            Node(MulExp, [
+                                Node(UnaryExp, [
+                                    Node(PrimaryExp, [
+                                        Node(Number, [
+                                            Token(IntConst, "1"),
+                                        ]),
+                                    ]),
+                                ]),
+                            ]),
+                        ]),
+                    ]),// [1]
+                    Token(RParen, ")"),
+                ]),
+            ]),
+        ]),
+    ]),
+])

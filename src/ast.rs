@@ -174,9 +174,9 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
 }
 
 /// args is a CSTNode return Exp
-/// 
+///
 /// UnaryExp -> UnaryOp UnaryExp | Ident `(` FuncRParams `)`
-fn parse_unary_exp_node(kind :Kind, cur_child_vec: &Vec<CSTNodeOrToken>)->Exp{
+fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
     // UnaryOp UnaryExp | Ident `(` FuncRParams `)`
     let mut it = cur_child_vec.into_iter();
     if let CSTNodeOrToken::Token(tok, content) = it.next().unwrap() {
@@ -195,8 +195,8 @@ fn parse_unary_exp_node(kind :Kind, cur_child_vec: &Vec<CSTNodeOrToken>)->Exp{
                // FuncRParams → Exp { ',' Exp }
             let next = it.next().unwrap();
             match next {
-                CSTNodeOrToken::Node(Kind::FuncRParams, childs) => {
-                    let mut it = childs.into_iter();
+                CSTNodeOrToken::Node(Kind::FuncRParams, grandchilds) => {
+                    let mut it = grandchilds.into_iter();
                     for i in it {
                         match i {
                             CSTNodeOrToken::Node(_, _) => {
@@ -210,14 +210,43 @@ fn parse_unary_exp_node(kind :Kind, cur_child_vec: &Vec<CSTNodeOrToken>)->Exp{
                             },
                         }
                     }
-                },
+                }
                 CSTNodeOrToken::Token(Kind::RParen, content) => (),
-                _ => panic!("Never should happen, expect `)` or real params"),
+                _ => unreachable!(),
             }
             return Exp::Call {
                 id: content.into(),
                 args,
             };
+        }
+    }
+    unreachable!()
+}
+
+/// PrimaryExp → '(' Exp ')'
+fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+    let mut left_p = false;
+    let mut right_p = false;
+    for tok in cur_child_vec {
+        match tok {
+            CSTNodeOrToken::Node(kind, grandchilds) => return parse_exp(tok),
+            CSTNodeOrToken::Token(kind, content) => match *kind {
+                Kind::LParen => {
+                    if !left_p {
+                        left_p = true
+                    } else {
+                        unreachable!()
+                    }
+                }
+                Kind::RParen => {
+                    if !right_p {
+                        right_p = true;
+                    } else {
+                        unreachable!()
+                    }
+                }
+                _ => unreachable!(),
+            },
         }
     }
     unimplemented!()
@@ -264,7 +293,7 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
             }
         }
         match *cur_node_kind {
-            Kind::PrimaryExp => {}
+            Kind::PrimaryExp => return parse_primary_exp_node(*cur_node_kind, cur_child_vec),
             Kind::UnaryExp => return parse_unary_exp_node(*cur_node_kind, cur_child_vec),
             _ => (),
         }
@@ -280,6 +309,30 @@ fn load_test_cases(path: &Path) -> CSTNodeOrToken {
     use ron::de::from_reader;
     let ret: CSTNodeOrToken = from_reader(file).expect("Wrong format");
     ret
+}
+
+#[test]
+fn test_primary_exp() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/primary_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+    let res: Exp = from_str(
+        "Constant(Int(1))",
+    )
+    .expect("Wrong format");
+    assert_eq!(exp, res);
 }
 
 #[test]
@@ -332,7 +385,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            -f(1,2,3);
+            (1)*3;
         }";
     let parse = parse(text);
     let node = parse.syntax();
