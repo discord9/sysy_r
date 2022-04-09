@@ -104,6 +104,7 @@ enum Exp {
     Constant(IntOrFloat),
     /// Ident
     Name(String),
+    //a[b]
     Subscript {
         value: Box<Exp>,
         slice: Box<Exp>,
@@ -172,6 +173,56 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
     ret
 }
 
+/// args is a CSTNode return Exp
+/// 
+/// UnaryExp -> UnaryOp UnaryExp | Ident `(` FuncRParams `)`
+fn parse_unary_exp_node(kind :Kind, cur_child_vec: &Vec<CSTNodeOrToken>)->Exp{
+    // UnaryOp UnaryExp | Ident `(` FuncRParams `)`
+    let mut it = cur_child_vec.into_iter();
+    if let CSTNodeOrToken::Token(tok, content) = it.next().unwrap() {
+        if is_unary_op(*tok) {
+            let val = parse_exp(it.next().unwrap());
+            return Exp::UnaryOp {
+                op: *tok,
+                val: Box::new(val),
+            };
+        } else if *tok == Kind::Ident {
+            let mut args = Vec::new();
+            assert_eq!(
+                CSTNodeOrToken::Token(Kind::LParen, "(".to_string()),
+                *it.next().unwrap()
+            ); // LParen
+               // FuncRParams → Exp { ',' Exp }
+            let next = it.next().unwrap();
+            match next {
+                CSTNodeOrToken::Node(Kind::FuncRParams, childs) => {
+                    let mut it = childs.into_iter();
+                    for i in it {
+                        match i {
+                            CSTNodeOrToken::Node(_, _) => {
+                                let val = parse_exp(i);
+                                args.push(val);
+                            }
+                            CSTNodeOrToken::Token(kind, _) => match *kind {
+                                Kind::RParen => break,
+                                Kind::Comma => continue,
+                                _ => panic!("Expect more Func Real Params."),
+                            },
+                        }
+                    }
+                },
+                CSTNodeOrToken::Token(Kind::RParen, content) => (),
+                _ => panic!("Never should happen, expect `)` or real params"),
+            }
+            return Exp::Call {
+                id: content.into(),
+                args,
+            };
+        }
+    }
+    unimplemented!()
+}
+
 /// given a Exp in CST, return AST
 ///
 /// `text` is the source code
@@ -213,51 +264,8 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
             }
         }
         match *cur_node_kind {
-            Kind::UnaryExp => {
-                // UnaryOp UnaryExp | Ident `(` FuncRParams `)`
-                let mut it = cur_child_vec.into_iter();
-                if let CSTNodeOrToken::Token(tok, content) = it.next().unwrap() {
-                    if is_unary_op(*tok) {
-                        let val = parse_exp(it.next().unwrap());
-                        return Exp::UnaryOp {
-                            op: *tok,
-                            val: Box::new(val),
-                        };
-                    } else if *tok == Kind::Ident {
-                        let mut args = Vec::new();
-                        assert_eq!(
-                            CSTNodeOrToken::Token(Kind::LParen, "(".to_string()),
-                            *it.next().unwrap()
-                        ); // LParen
-                           // FuncRParams → Exp { ',' Exp }
-                        let next = it.next().unwrap();
-                        match next {
-                            CSTNodeOrToken::Node(Kind::FuncRParams, childs) => {
-                                let mut it = childs.into_iter();
-                                for i in it {
-                                    match i {
-                                        CSTNodeOrToken::Node(_, _) => {
-                                            let val = parse_exp(i);
-                                            args.push(val);
-                                        }
-                                        CSTNodeOrToken::Token(kind, _) => match *kind {
-                                            Kind::RParen => break,
-                                            Kind::Comma => continue,
-                                            _ => panic!("Expect more Func Real Params."),
-                                        },
-                                    }
-                                }
-                            },
-                            CSTNodeOrToken::Token(Kind::RParen, content) => (),
-                            _ => panic!("Never should happen, expect `)` or real params"),
-                        }
-                        return Exp::Call {
-                            id: content.into(),
-                            args,
-                        };
-                    }
-                }
-            },
+            Kind::PrimaryExp => {}
+            Kind::UnaryExp => return parse_unary_exp_node(*cur_node_kind, cur_child_vec),
             _ => (),
         }
     }
