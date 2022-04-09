@@ -9,7 +9,34 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CompUnit {
-    item: Vec<Either<Decl, FuncDef>>,
+    items: Vec<DeclOrFuncDef>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+enum DeclOrFuncDef{
+    Decl(Decl),
+    FuncDef(FuncDef)
+}
+fn parse_comp_unit(node : &CST)->CompUnit{
+    match node {
+        CST::Node(Kind::CompUnit, childs) => {
+            let mut items = Vec::new();
+            for elem in childs{
+                match elem { 
+                    CST::Node(Kind::Decl, _) => {
+                        let res = DeclOrFuncDef::Decl(parse_decl(&elem));
+                        items.push(res);
+                    }
+                    CST::Node(Kind::FuncDef,_) => {
+                        let res = DeclOrFuncDef::FuncDef(parse_func_def(&elem));
+                        items.push(res);
+                    }
+                    _ => panic!("Expect Decl or FuncDef")
+                }
+            }
+            CompUnit{items}
+        }
+        _ => panic!("Expect CompUnit")
+    }
 }
 
 /// merge ConstDecl and VarDecl together
