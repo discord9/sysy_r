@@ -57,17 +57,17 @@ fn parse_init_val(node: &CST) -> InitVal {
                     if matches!(*kind, Kind::ConstInitVal | Kind::InitVal) {
                         //let ret = parse_init_val(elem);
                         args.push(parse_init_val(elem));
-                    }else if matches!(*kind, Kind::ConstExp | Kind::Expression) {
+                    } else if matches!(*kind, Kind::ConstExp | Kind::Expression) {
                         exp = Some(parse_exp(elem));
                     }
                 }
             }
         }
-        if args.is_empty() && exp.is_some(){
-            return InitVal(ExpOrInitVal::Exp(exp.unwrap()))
-        }else if !args.is_empty() {
-            return InitVal(ExpOrInitVal::InitVals(args))
-        }else{
+        if args.is_empty() && exp.is_some() {
+            return InitVal(ExpOrInitVal::Exp(exp.unwrap()));
+        } else if !args.is_empty() {
+            return InitVal(ExpOrInitVal::InitVals(args));
+        } else {
             unreachable!()
         }
     }
@@ -174,11 +174,88 @@ struct FuncDef {
     ident: String,
     formal_params: Option<Vec<FuncFParam>>,
 }
+
+fn parse_func_def(node: &CST) -> FuncDef {
+    if let CST::Node(Kind::FuncDef, childs) = node {
+        let mut it = childs.iter();
+        let btype = parse_basic_type(it.next().unwrap());
+        let ident = {
+            match it.next().unwrap() {
+                CST::Token(Kind::Ident, content) => content.to_owned(),
+                _ => unreachable!(),
+            }
+        };
+        let mut formal_params = Vec::new();
+        assert_eq!(
+            CST::Token(Kind::LParen, "(".to_string()),
+            *it.next().unwrap()
+        );
+        match it.next().unwrap() {
+            CST::Node(Kind::FuncFParams, childs) => {
+                for elem in childs {
+                    // parse FuncFParams
+                    match *elem {
+                        CST::Token(Kind::Comma, _) => continue,
+                        CST::Node(Kind::FuncFParam, _) => {
+                            formal_params.push(parse_func_formal_param(elem));
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            CST::Token(Kind::RParen, _) => (),
+            _ => unreachable!(),
+        }
+
+        //assert_eq!(CST::Token(Kind::RParen, ")"), it.next().unwrap());
+    }
+    unreachable!()
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct FuncFParam {
     btype: BasicType,
     ident: String,
-    array_shape: Option<Vec<Exp>>, // if not None, default to have `[]` and then zero to multiple `[`Exp`]`
+    array_shape: Option<Vec<Exp>>,
+    // if None, then it is a normal var
+    // if not None, default to have `[]` and then zero to multiple `[`Exp`]`
+}
+
+/// FuncFParam → BType Ident ['[' ']' { '[' Exp ']' }]
+fn parse_func_formal_param(node: &CST) -> FuncFParam {
+    if let CST::Node(kind, childs) = node {
+        let mut it = childs.iter();
+        let btype = parse_basic_type(it.next().unwrap());
+        let ident = {
+            match it.next().unwrap() {
+                CST::Token(Kind::Ident, content) => content.to_string(),
+                _ => unreachable!(),
+            }
+        };
+        let mut array_shape = Vec::new();
+        let mut is_array = false;
+        if let Some(CST::Token(Kind::LBracket, _)) = it.next() {
+            it.next(); // consume `]`
+            is_array = true;
+            while let Some(CST::Token(Kind::LBracket, _)) = it.next() {
+                let exp = parse_exp(it.next().unwrap());
+                array_shape.push(exp);
+                it.next(); // consume `]`
+            }
+        }
+        return FuncFParam {
+            btype,
+            ident,
+            array_shape: {
+                if is_array {
+                    Some(array_shape)
+                } else {
+                    None
+                }
+            },
+        };
+    }
+    unreachable!()
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct Block {
@@ -258,7 +335,7 @@ fn parse_stmt(node: &CST) -> Statement {
                         match *kind {
                             Kind::LeftValue => {
                                 // 0: LVal 1:= 2:Exp
-                                let left_value = parse_exp(childs.get(0).unwrap());
+                                let left_value = parse_exp(elem);
                                 let value = parse_exp(childs.get(2).unwrap());
                                 return Statement::Assign {
                                     target: left_value,
@@ -266,11 +343,11 @@ fn parse_stmt(node: &CST) -> Statement {
                                 };
                             }
                             Kind::Expression => {
-                                let value = parse_exp(childs.get(2).unwrap());
+                                let value = parse_exp(elem);
                                 return Statement::Exp(value);
                             }
                             Kind::Block => {
-                                unimplemented!()
+                                return Statement::Block(parse_block(elem))
                             }
                             _ => unreachable!(),
                         }
