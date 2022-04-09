@@ -371,6 +371,40 @@ fn load_test_cases(path: &Path) -> CSTNodeOrToken {
 }
 
 #[test]
+fn test_binary_exp() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/binary_exp.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_exp(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+    let res: Exp = from_str("
+    BinOp(
+        op: OpAdd,
+        left: BinOp(
+            op: OpAdd,
+            left: Constant(Int(1)),
+            right: Constant(Int(2)),
+        ),
+        right: BinOp(
+            op: OpMul,
+            left: Constant(Int(3)),
+            right: Constant(Int(4)),
+        ),
+    )").expect("Wrong format");
+    assert_eq!(exp, res);
+}
+
+#[test]
 fn test_primary_exp() {
     use ron::de::from_str;
     use ron::ser::{to_string_pretty, PrettyConfig};
@@ -441,7 +475,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            (1)*3;
+            1+2+3*4;
         }";
     let parse = parse(text);
     let node = parse.syntax();
@@ -449,7 +483,7 @@ fn test_integrate() {
     println!("Errors:{:?}", parse.errors);
     let pretty = PrettyConfig::new()
         .separate_tuple_members(false)
-        .indentor("  ".to_string())
+        //.indentor("  ".to_string())
         .enumerate_arrays(true);
     println!(
         "Ron Tree:\n{}",
