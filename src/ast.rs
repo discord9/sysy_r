@@ -77,22 +77,33 @@ enum Statement {
 /// merge all *Exp into one. is it wise?NO, but as a enum with all possible variant? YESYES
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum Exp {
-    Call {
-        id: String,
-        args: Vec<Exp>,
-    },
-    /// Binary Operator. Note: in CST BinOp is a vec of exp, like 1+2+3
+    /// Call to function
+    ///
+    /// `f(args)`
+    Call { id: String, args: Vec<Exp> },
+    /// Binary Operator. Note: in CST BinOp is a vec of exp, like vec!\[1+2+3\]
+    ///
+    /// `+` `-` `*` `/` `%`
     BinOp {
         op: Kind, // OpAdd OpSub OpMul OpDiv OpMod
         left: Box<Exp>,
         right: Box<Exp>,
     },
+    /// `&&` `||`
+    BoolOp {
+        op: Kind, // OpAnd OpOr
+        args: Vec<Exp>,
+    },
     /// Unary operator
+    ///
+    /// `+1` `-1` `!flag`
     UnaryOp {
         op: Kind, // OpSub OpAdd OpNot
         val: Box<Exp>,
     },
     /// Compare operator can be chain like: 1<2<3
+    ///
+    /// `<` `>` `<=` `>=` `==` `!=`
     ///
     /// => op: LT,LT;left:1, comparators:[2,3]
     CmpOp {
@@ -104,11 +115,8 @@ enum Exp {
     Constant(IntOrFloat),
     /// Ident
     Name(String),
-    //a[b]
-    Subscript {
-        value: Box<Exp>,
-        slice: Box<Exp>,
-    },
+    /// `a[b]`
+    Subscript { value: Box<Exp>, slice: Box<Exp> },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -139,6 +147,14 @@ fn is_unary_op(kind: Kind) -> bool {
 fn is_bin_op(kind: Kind) -> bool {
     match kind {
         Kind::OpAdd | Kind::OpSub | Kind::OpMul | Kind::OpDiv | Kind::OpMod => true,
+        _ => false,
+    }
+}
+
+/// `<` `>` `>=` `<=` `!=` `==`
+fn is_cmp_op(kind: Kind) -> bool {
+    match kind {
+        Kind::OpLT | Kind::OpGT | Kind::OpNL | Kind::OpNG | Kind::OpNE | Kind::OpEQ => true,
         _ => false,
     }
 }
@@ -232,14 +248,14 @@ fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
             CSTNodeOrToken::Node(kind, grandchilds) => return parse_exp(tok),
             CSTNodeOrToken::Token(kind, content) => match *kind {
                 Kind::LParen => {
-                    if !left_p {
+                    if !left_p && !right_p {
                         left_p = true
                     } else {
                         unreachable!()
                     }
                 }
                 Kind::RParen => {
-                    if !right_p {
+                    if !right_p && left_p {
                         right_p = true;
                     } else {
                         unreachable!()
@@ -249,7 +265,37 @@ fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
             },
         }
     }
-    unimplemented!()
+    unreachable!()
+}
+
+/// parse binary exp in right associativity
+/// TODO: test it
+fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+    let mut left = None;
+    let mut op = None;
+    for tok in cur_child_vec {
+        match tok {
+            CSTNodeOrToken::Node(kind, grandchilds) => {
+                if left.is_none() {
+                    left = Some(parse_exp(tok));
+                } else if op.is_some() {
+                    let right = parse_exp(tok);
+                    // lfet op right
+                    left = Some(Exp::BinOp {
+                        op: op.unwrap(),
+                        left: Box::new(left.unwrap()),
+                        right: Box::new(right),
+                    })
+                } else {
+                    unreachable!()
+                }
+            }
+            CSTNodeOrToken::Token(kind, _content) => {
+                op = Some(*kind);
+            }
+        }
+    }
+    return left.unwrap();
 }
 
 /// given a Exp in CST, return AST
@@ -295,12 +341,25 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
         match *cur_node_kind {
             Kind::PrimaryExp => return parse_primary_exp_node(*cur_node_kind, cur_child_vec),
             Kind::UnaryExp => return parse_unary_exp_node(*cur_node_kind, cur_child_vec),
+            // a series of BinOp and LogicOp
+            // BinOp CmpOp BoolOp
+            // in cst have similar storage pattern:
+            // exp op exp op...
+            // all deals in different way
+            // BinOp: .... to right associtivity
+            // TODO: test this arm
+            Kind::MulExp | Kind::AddExp => return parse_binary_exp_node(*cur_node_kind, cur_child_vec),
+            // CmpOp: a array of op and exp
+            // note eq and rel is separate in cst so should be seprarte in ast
+            Kind::RelationExp | Kind::EqExp => (),
+            // BoolOp: a single op and a array of exp
+            Kind::LogicAndExp | Kind::LogicOrExp => {}
             _ => (),
         }
     }
     // go all the way deeper until there is a token or there is more than one child
     // for simpler tree
-    unimplemented!()
+    unreachable!()
 }
 use std::fs::File;
 use std::path::Path;
@@ -328,10 +387,7 @@ fn test_primary_exp() {
         "AST:\n{}",
         to_string_pretty(&exp, pretty.to_owned()).unwrap()
     );
-    let res: Exp = from_str(
-        "Constant(Int(1))",
-    )
-    .expect("Wrong format");
+    let res: Exp = from_str("Constant(Int(1))").expect("Wrong format");
     assert_eq!(exp, res);
 }
 
