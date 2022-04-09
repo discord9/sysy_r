@@ -1,14 +1,53 @@
-Node(AddExp, [
-              Node(MulExp, [
-                Node(UnaryExp, [
-                  Token(OpSub, "-"),// [0]
-                  Node(UnaryExp, [
-                    Node(PrimaryExp, [
-                      Node(Number, [
-                        Token(IntConst, "1"),
-                    ]),
+Node(UnaryExp, [
+  Token(OpSub, "-"),// [0]
+  Node(UnaryExp, [
+    Token(Ident, "f"),// [0]
+    Token(LParen, "("),// [1]
+    Node(FuncRParams, [
+      Node(Expression, [
+        Node(AddExp, [
+          Node(MulExp, [
+            Node(UnaryExp, [
+              Node(PrimaryExp, [
+                Node(Number, [
+                  Token(IntConst, "1"),
                 ]),
+              ]),
             ]),
+          ]),
         ]),
-    ])
+      ]),// [0]
+      Token(Comma, ","),// [1]
+      Node(Expression, [
+        Node(AddExp, [
+          Node(MulExp, [
+            Node(UnaryExp, [
+              Node(PrimaryExp, [
+                Node(Number, [
+                  Token(IntConst, "2"),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),// [2]
+      Token(Comma, ","),// [3]
+      Node(Expression, [
+        Node(AddExp, [
+          Node(MulExp, [
+            Node(UnaryExp, [
+              Node(PrimaryExp, [
+                Node(Number, [
+                  Token(IntConst, "3"),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]),// [2]
+    Token(RParen, ")")
+  ]),
 ])
+              
+              
