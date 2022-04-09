@@ -19,22 +19,105 @@ struct Decl {
     btype: BasicType,
     def: Vec<Def>,
 }
+/// is VarDef or ConstDef
+#[derive(Serialize, Deserialize, Debug)]
+struct Def {
+    is_const: bool, // if not const InitVal can be optional
+    ident: String,
+    shape: Option<Vec<Exp>>,   // const
+    init_val: Option<InitVal>, //const_init_val:
+}
+#[derive(Serialize, Deserialize, Debug)]
+enum ExpOrInitVal{
+    Exp(Exp),
+    InitVal(Box<InitVal>)
+}
+/// -> Exp | `{` InitVal {`,` InitVal }`}`
+#[derive(Serialize, Deserialize, Debug)]
+struct InitVal(ExpOrInitVal);
+
+fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
+    match node {
+        CSTNodeOrToken::Node(kind, childs) => {
+            if *kind!=Kind::ConstDef && *kind!=Kind::VarDef{
+                panic!("Expect a def from CST!")
+            }
+            let mut is_first = true;
+            let mut ident = String::new();
+            let mut shape = Vec::new();
+            let mut init_val: Option<InitVal> = None;
+            for elem in childs{
+                if is_first{
+                    is_first = false;
+                    if let CSTNodeOrToken::Token(Kind::Ident, name) = elem{
+                        ident = name.to_owned();
+                    }
+                }
+                match elem {
+                    CSTNodeOrToken::Token(Kind::LBracket, _) | CSTNodeOrToken::Token(Kind::RBracket, _) => (),
+                    CSTNodeOrToken::Node(Kind::Expression, _) => {
+                        let res = parse_exp(elem);
+                        shape.push(res);
+                    }
+                    CSTNodeOrToken::Node(Kind::ConstInitVal, _) | CSTNodeOrToken::Node(Kind::InitVal, _) => {
+                        // parse init val
+                        unimplemented!()
+                    }
+                    _ => ()
+                }
+            }
+        }
+        _ => panic!("Expect a Def"),
+    }
+    unimplemented!()
+}
+
+/// ConstDecl or VarDecl
+fn parse_decl(node: &CSTNodeOrToken) -> Decl {
+    match node {
+        CSTNodeOrToken::Node(kind, childs) => {
+            // [const] 0:BType 1:VarDef { ',' VarDef } ';'
+            let mut is_const = *kind == Kind::ConstDecl;
+            if *kind!=Kind::ConstDecl && *kind!=Kind::VarDecl{
+                panic!("Expect a decl from CST!")
+            }
+            let offset = {
+                if is_const {
+                    1
+                } else {
+                    0
+                }
+            };
+            let btype = parse_basic_type(childs.get(offset).unwrap());
+            unimplemented!()
+        }
+        _ => panic!("Expect a Decl"),
+    }
+    unimplemented!()
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 enum BasicType {
     Int,
     Float,
     Void,
 }
-#[derive(Serialize, Deserialize, Debug)]
-struct Def {
-    is_const: bool, // if not const InitVal can be optional
-    ident: String,
-    exp: Option<Vec<Exp>>,
-    init_val: Option<InitVal>, //const_init_val:
+
+fn parse_basic_type(node: &CSTNodeOrToken) -> BasicType {
+    match node {
+        CSTNodeOrToken::Token(Kind::BType, val) => match val.as_str() {
+            "int" => return BasicType::Int,
+            "float" => return BasicType::Float,
+            "void" => return BasicType::Void,
+            _ => panic!("Expect int, float or void")
+        },
+        _ => panic!("Expect CST Basic Type!"),
+    }
 }
-/// -> Exp | `{` InitVal {`,` InitVal }`}`
-#[derive(Serialize, Deserialize, Debug)]
-struct InitVal(Either<Exp, Vec<InitVal>>);
+
+
+
+
 #[derive(Serialize, Deserialize, Debug)]
 struct FuncDef {
     func_type: BasicType,
@@ -52,19 +135,26 @@ struct Block {
     items: Option<Vec<(BlockItem)>>,
 }
 #[derive(Serialize, Deserialize, Debug)]
-struct BlockItem(Either<Decl, Statement>);
+enum DeclOrStatement {
+    Decl(Decl),
+    Statement(Statement),
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct BlockItem(DeclOrStatement);
 #[derive(Serialize, Deserialize, Debug)]
 enum Statement {
+    Empty, //`;`
+    /// LVal '=' Exp ';'
     Assign {
-        target: Box<Exp>,
-        value: Box<Exp>,
+        target: Exp,
+        value: Exp,
     },
-    Exp,
-    Block,
+    Exp(Exp),
+    Block(Block),
     IfStmt {
         cond: Exp,
         stmt: Box<Statement>,
-        else_stmt: Box<Statement>,
+        else_stmt: Box<Option<Statement>>,
     },
     WhileStmt {
         cond: Exp,
@@ -73,6 +163,117 @@ enum Statement {
     BreakStmt,
     ContinueStmt,
     ReturnStmt(Option<Exp>),
+}
+
+/// CST: `{` BlockItem `}`
+fn parse_block(node: &CSTNodeOrToken) -> Block {
+    match node {
+        CSTNodeOrToken::Node(Kind::Statement, childs) => {
+            let mut block_item: Vec<DeclOrStatement> = Vec::new();
+            for elem in childs {
+                match elem {
+                    CSTNodeOrToken::Token(Kind::LCurly, _)
+                    | CSTNodeOrToken::Token(Kind::RCurly, _) => (),
+                    CSTNodeOrToken::Node(Kind::BlockItem, grandchilds) => {
+                        let only_child = grandchilds.get(0).unwrap();
+                        match only_child {
+                            CSTNodeOrToken::Node(Kind::Decl, _) => {
+                                let res = parse_decl(only_child);
+                                block_item.push(DeclOrStatement::Decl(res));
+                                unimplemented!()
+                            }
+                            CSTNodeOrToken::Node(Kind::Statement, _) => {
+                                let res = parse_stmt(only_child);
+                                block_item.push(DeclOrStatement::Statement(res));
+                            }
+                            _ => panic!("Expect CST Decl or Statement!"),
+                        }
+                    }
+                    _ => panic!("Expect CST BlockItem or Curly!"),
+                }
+            }
+        }
+        _ => panic!("Expect a CST Block!"),
+    }
+    unimplemented!()
+}
+
+/// parse statement
+fn parse_stmt(node: &CSTNodeOrToken) -> Statement {
+    // first: LeftValue | Exp | Semicolon | Block | ....
+    match node {
+        CSTNodeOrToken::Node(Kind::Statement, childs) => {
+            // check what is the first elem, to see what type of stmt is this
+            if let Some(elem) = childs.get(0) {
+                match elem {
+                    CSTNodeOrToken::Node(kind, grandchilds) => {
+                        match *kind {
+                            Kind::LeftValue => {
+                                // 0: LVal 1:= 2:Exp
+                                let left_value = parse_exp(childs.get(0).unwrap());
+                                let value = parse_exp(childs.get(2).unwrap());
+                                return Statement::Assign {
+                                    target: left_value,
+                                    value,
+                                };
+                            }
+                            Kind::Expression => {
+                                let value = parse_exp(childs.get(2).unwrap());
+                                return Statement::Exp(value);
+                            }
+                            Kind::Block => {
+                                unimplemented!()
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    CSTNodeOrToken::Token(kind, _) => match *kind {
+                        Kind::Semicolon => return Statement::Empty,
+                        Kind::IfKeyword => {
+                            // TODO: maybe check unused tokens?
+                            // 0:if 1:( 2:Cond 3:) 4:Stmt Optional:(5:else 6:stmt)
+                            let cond = childs.get(2).unwrap();
+                            let cond = parse_exp(cond);
+                            let stmt = childs.get(4).unwrap();
+                            let stmt = parse_stmt(stmt);
+                            let mut cst_else_stmt: Option<_> = childs.get(6);
+                            let mut ast_else_stmt = None;
+                            if cst_else_stmt.is_some() {
+                                ast_else_stmt = Some(parse_stmt(cst_else_stmt.unwrap()));
+                            }
+                            return Statement::IfStmt {
+                                cond: cond,
+                                stmt: Box::new(stmt),
+                                else_stmt: Box::new(ast_else_stmt),
+                            };
+                        }
+                        Kind::WhileKeyword => {
+                            // 0:while 1:( 2:Cond 3:) 4:Stmt
+                            let cond = childs.get(2).unwrap();
+                            let cond = parse_exp(cond);
+                            let stmt = childs.get(4).unwrap();
+                            let stmt = Box::new(parse_stmt(stmt));
+                            return Statement::WhileStmt { cond, stmt };
+                        }
+                        Kind::BreakKeyword => return Statement::BreakStmt,
+                        Kind::ContinueKeyword => return Statement::ContinueStmt,
+                        Kind::ReturnKeyword => {
+                            // 0: return optional: 1: exp
+                            if let Some(exp) = childs.get(1) {
+                                let ret = parse_exp(exp);
+                                return Statement::ReturnStmt(Some(ret));
+                            } else {
+                                return Statement::ReturnStmt(None);
+                            }
+                        }
+                        _ => unreachable!(),
+                    },
+                }
+            }
+        }
+        _ => panic!("Expect a CST Statement!"),
+    }
+    unimplemented!()
 }
 /// merge all *Exp into one. is it wise?NO, but as a enum with all possible variant? YESYES
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -313,7 +514,7 @@ fn parse_subscript_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> 
             CSTNodeOrToken::Token(Kind::LBracket, _) => {
                 cnt_pair += 1;
                 assert_eq!(cnt_pair, 1);
-            } 
+            }
             CSTNodeOrToken::Token(Kind::RBracket, _) => {
                 cnt_pair -= 1;
                 assert_eq!(cnt_pair, 0);
@@ -503,7 +704,7 @@ fn test_subscript_exp() {
                 left: Constant(Int(2)),
                 right: Constant(Int(3)),
             ),
-        )"#
+        )"#,
     )
     .expect("Wrong format");
     assert_eq!(exp, res);
@@ -552,7 +753,6 @@ fn test_logic_exp() {
     assert_eq!(exp, res);
 }
 
-
 #[test]
 fn test_compare_exp() {
     use ron::de::from_str;
@@ -588,7 +788,6 @@ fn test_compare_exp() {
     .expect("Wrong format");
     assert_eq!(exp, res);
 }
-
 
 #[test]
 fn test_binary_exp() {

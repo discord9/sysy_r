@@ -172,7 +172,7 @@ mod test {
         let text = "123 456.789 456e3";
         let res = lex(text);
         //println!("{:?}", res);
-        for &tok in &res {
+        for &_tok in &res {
             //let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
             //println!("\'{}\'=>{:?} ", src, tok.1);
         }

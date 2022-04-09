@@ -650,15 +650,15 @@ mod tests {
     }
 
     /// load array of test case from a .ron file
-    fn load_test_cases(path: &Path) -> Vec<test_case> {
+    fn load_test_cases(path: &Path) -> Vec<TestCase> {
         let mut file = File::open(path).expect("Fail to open file.");
         use ron::de::from_reader;
-        let ret: Vec<test_case> = from_reader(file).expect("Wrong format");
+        let ret: Vec<TestCase> = from_reader(file).expect("Wrong format");
         ret
     }
     /// for test_case_S in *.ron file
     #[derive(Serialize, Deserialize)]
-    pub struct test_case {
+    pub struct TestCase {
         pub src: String,
         pub tokens: Vec<(Kind, String)>,
         pub cst: CSTNode
