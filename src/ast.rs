@@ -30,22 +30,29 @@ struct Def {
 #[derive(Serialize, Deserialize, Debug)]
 enum ExpOrInitVal{
     Exp(Exp),
-    InitVal(Box<InitVal>)
+    InitVal(Box<Option<InitVal>>)
 }
 /// -> Exp | `{` InitVal {`,` InitVal }`}`
 #[derive(Serialize, Deserialize, Debug)]
 struct InitVal(ExpOrInitVal);
 
-fn parse_init_val(node: &CSTNodeOrToken) -> InitVal {
-    match *node {
-        _ => ()
+/// ConstInitVal or InitVal
+fn parse_init_val(node: &CST) -> InitVal {
+    if let CST::Node(kind, childs) = node{
+
+        match kind {
+            Kind::ConstExp | Kind::Expression => {
+            }
+            _ => ()
+        }
     }
+    
     unimplemented!()
 }
 
-fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
+fn parse_def(node: &CST, is_const: bool) -> Def {
     match node {
-        CSTNodeOrToken::Node(kind, childs) => {
+        CST::Node(kind, childs) => {
             if *kind!=Kind::ConstDef && *kind!=Kind::VarDef{
                 panic!("Expect a def from CST!")
             }
@@ -56,17 +63,17 @@ fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
             for elem in childs{
                 if is_first{
                     is_first = false;
-                    if let CSTNodeOrToken::Token(Kind::Ident, name) = elem{
+                    if let CST::Token(Kind::Ident, name) = elem{
                         ident = name.to_owned();
                     }
                 }
                 match elem {
-                    CSTNodeOrToken::Token(Kind::LBracket, _) | CSTNodeOrToken::Token(Kind::RBracket, _) => (),
-                    CSTNodeOrToken::Node(Kind::Expression, _) => {
+                    CST::Token(Kind::LBracket, _) | CST::Token(Kind::RBracket, _) => (),
+                    CST::Node(Kind::Expression, _) => {
                         let res = parse_exp(elem);
                         shape.push(res);
                     }
-                    CSTNodeOrToken::Node(Kind::ConstInitVal, _) | CSTNodeOrToken::Node(Kind::InitVal, _) => {
+                    CST::Node(Kind::ConstInitVal, _) | CST::Node(Kind::InitVal, _) => {
                         // parse init val
                         init_val = Some(parse_init_val(elem));
                     }
@@ -85,9 +92,9 @@ fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
 }
 
 /// ConstDecl or VarDecl
-fn parse_decl(node: &CSTNodeOrToken) -> Decl {
+fn parse_decl(node: &CST) -> Decl {
     match node {
-        CSTNodeOrToken::Node(kind, childs) => {
+        CST::Node(kind, childs) => {
             // [const] 0:BType 1:VarDef { ',' VarDef } ';'
             let mut is_const = *kind == Kind::ConstDecl;
             if *kind!=Kind::ConstDecl && *kind!=Kind::VarDecl{
@@ -125,9 +132,9 @@ enum BasicType {
     Void,
 }
 
-fn parse_basic_type(node: &CSTNodeOrToken) -> BasicType {
+fn parse_basic_type(node: &CST) -> BasicType {
     match node {
-        CSTNodeOrToken::Token(Kind::BType, val) => match val.as_str() {
+        CST::Token(Kind::BType, val) => match val.as_str() {
             "int" => BasicType::Int,
             "float" => BasicType::Float,
             "void" => BasicType::Void,
@@ -188,22 +195,22 @@ enum Statement {
 }
 
 /// CST: `{` BlockItem `}`
-fn parse_block(node: &CSTNodeOrToken) -> Block {
+fn parse_block(node: &CST) -> Block {
     match node {
-        CSTNodeOrToken::Node(Kind::Statement, childs) => {
+        CST::Node(Kind::Statement, childs) => {
             let mut block_item: Vec<DeclOrStatement> = Vec::new();
             for elem in childs {
                 match elem {
-                    CSTNodeOrToken::Token(Kind::LCurly, _)
-                    | CSTNodeOrToken::Token(Kind::RCurly, _) => (),
-                    CSTNodeOrToken::Node(Kind::BlockItem, grandchilds) => {
+                    CST::Token(Kind::LCurly, _)
+                    | CST::Token(Kind::RCurly, _) => (),
+                    CST::Node(Kind::BlockItem, grandchilds) => {
                         let only_child = grandchilds.get(0).unwrap();
                         match only_child {
-                            CSTNodeOrToken::Node(Kind::Decl, _) => {
+                            CST::Node(Kind::Decl, _) => {
                                 let res = parse_decl(only_child);
                                 block_item.push(DeclOrStatement::Decl(res));
                             }
-                            CSTNodeOrToken::Node(Kind::Statement, _) => {
+                            CST::Node(Kind::Statement, _) => {
                                 let res = parse_stmt(only_child);
                                 block_item.push(DeclOrStatement::Statement(res));
                             }
@@ -220,14 +227,14 @@ fn parse_block(node: &CSTNodeOrToken) -> Block {
 }
 
 /// parse statement
-fn parse_stmt(node: &CSTNodeOrToken) -> Statement {
+fn parse_stmt(node: &CST) -> Statement {
     // first: LeftValue | Exp | Semicolon | Block | ....
     match node {
-        CSTNodeOrToken::Node(Kind::Statement, childs) => {
+        CST::Node(Kind::Statement, childs) => {
             // check what is the first elem, to see what type of stmt is this
             if let Some(elem) = childs.get(0) {
                 match elem {
-                    CSTNodeOrToken::Node(kind, grandchilds) => {
+                    CST::Node(kind, grandchilds) => {
                         match *kind {
                             Kind::LeftValue => {
                                 // 0: LVal 1:= 2:Exp
@@ -248,7 +255,7 @@ fn parse_stmt(node: &CSTNodeOrToken) -> Statement {
                             _ => unreachable!(),
                         }
                     }
-                    CSTNodeOrToken::Token(kind, _) => match *kind {
+                    CST::Token(kind, _) => match *kind {
                         Kind::Semicolon => return Statement::Empty,
                         Kind::IfKeyword => {
                             // TODO: maybe check unused tokens?
@@ -348,8 +355,8 @@ enum IntOrFloat {
 }
 use std::ops::Range;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub enum CSTNodeOrToken {
-    Node(Kind, Vec<CSTNodeOrToken>),
+pub enum CST {
+    Node(Kind, Vec<CST>),
     Token(Kind, String),
 }
 
@@ -373,10 +380,10 @@ fn is_cmp_op(kind: Kind) -> bool {
 }
 
 /// transform a syntaxNode tree into a rusty object notion style simpler tree
-fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrToken {
+fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CST {
     let kind = node.kind();
     //let mut ret = CSTNodeOrToken::Node(kind, Vec::new());
-    let mut child_elem: Vec<CSTNodeOrToken> = Vec::new();
+    let mut child_elem: Vec<CST> = Vec::new();
     node.children_with_tokens()
         .map(|child| {
             match child {
@@ -391,24 +398,24 @@ fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CSTNodeOrT
                     }
                     //let _range = token.text_range();
                     //let _range: Range<usize> = (range.start().into()..range.end().into());
-                    child_elem.push(CSTNodeOrToken::Token(token.kind(), content.to_string()));
+                    child_elem.push(CST::Token(token.kind(), content.to_string()));
                 }
             };
         })
         .count();
     //let _range = node.text_range();
     //let _range: Range<usize> = (range.start().into()..range.end().into());
-    let ret = CSTNodeOrToken::Node(kind, child_elem);
+    let ret = CST::Node(kind, child_elem);
     ret
 }
 
 /// args is a CSTNode return Exp
 ///
 /// UnaryExp -> UnaryOp UnaryExp | Ident `(` FuncRParams `)`
-fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     // UnaryOp UnaryExp | Ident `(` FuncRParams `)`
     let mut it = cur_child_vec.into_iter();
-    if let CSTNodeOrToken::Token(tok, content) = it.next().unwrap() {
+    if let CST::Token(tok, content) = it.next().unwrap() {
         if is_unary_op(*tok) {
             let val = parse_exp(it.next().unwrap());
             return Exp::UnaryOp {
@@ -418,21 +425,21 @@ fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp 
         } else if *tok == Kind::Ident {
             let mut args = Vec::new();
             assert_eq!(
-                CSTNodeOrToken::Token(Kind::LParen, "(".to_string()),
+                CST::Token(Kind::LParen, "(".to_string()),
                 *it.next().unwrap()
             ); // LParen
                // FuncRParams → Exp { ',' Exp }
             let next = it.next().unwrap();
             match next {
-                CSTNodeOrToken::Node(Kind::FuncRParams, grandchilds) => {
+                CST::Node(Kind::FuncRParams, grandchilds) => {
                     let mut it = grandchilds.into_iter();
                     for i in it {
                         match i {
-                            CSTNodeOrToken::Node(_, _) => {
+                            CST::Node(_, _) => {
                                 let val = parse_exp(i);
                                 args.push(val);
                             }
-                            CSTNodeOrToken::Token(kind, _) => match *kind {
+                            CST::Token(kind, _) => match *kind {
                                 Kind::RParen => break,
                                 Kind::Comma => continue,
                                 _ => panic!("Expect more Func Real Params."),
@@ -440,7 +447,7 @@ fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp 
                         }
                     }
                 }
-                CSTNodeOrToken::Token(Kind::RParen, content) => (),
+                CST::Token(Kind::RParen, content) => (),
                 _ => unreachable!(),
             }
             return Exp::Call {
@@ -453,13 +460,13 @@ fn parse_unary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp 
 }
 
 /// PrimaryExp → '(' Exp ')'
-fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut left_p = false;
     let mut right_p = false;
     for tok in cur_child_vec {
         match tok {
-            CSTNodeOrToken::Node(kind, grandchilds) => return parse_exp(tok),
-            CSTNodeOrToken::Token(kind, content) => match *kind {
+            CST::Node(kind, grandchilds) => return parse_exp(tok),
+            CST::Token(kind, content) => match *kind {
                 Kind::LParen => {
                     if !left_p && !right_p {
                         left_p = true
@@ -482,18 +489,18 @@ fn parse_primary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
 }
 
 /// parse bool exp
-fn parse_bool_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_bool_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut op = None;
     let mut args = Vec::new();
     let mut expect_node = true; // ping-pong parse node and op token
     for elem in cur_child_vec {
         match elem {
-            CSTNodeOrToken::Node(kind, grandchilds) => {
+            CST::Node(kind, grandchilds) => {
                 args.push(parse_exp(elem));
                 assert_eq!(expect_node, true);
                 expect_node = false;
             }
-            CSTNodeOrToken::Token(kind, _) => {
+            CST::Token(kind, _) => {
                 if op.is_none() {
                     op = Some(*kind);
                 } else {
@@ -511,27 +518,27 @@ fn parse_bool_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
 }
 
 /// parse i.e. `a[1][2][3]`
-fn parse_subscript_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_subscript_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut cur_exp: Option<Exp> = None;
     let mut cnt_pair = 0;
     for elem in cur_child_vec {
         match elem {
-            CSTNodeOrToken::Token(Kind::Ident, content) => {
+            CST::Token(Kind::Ident, content) => {
                 if cur_exp.is_none() {
                     cur_exp = Some(Exp::Name(content.to_owned()));
                 } else {
                     unreachable!()
                 }
             }
-            CSTNodeOrToken::Token(Kind::LBracket, _) => {
+            CST::Token(Kind::LBracket, _) => {
                 cnt_pair += 1;
                 assert_eq!(cnt_pair, 1);
             }
-            CSTNodeOrToken::Token(Kind::RBracket, _) => {
+            CST::Token(Kind::RBracket, _) => {
                 cnt_pair -= 1;
                 assert_eq!(cnt_pair, 0);
             }
-            CSTNodeOrToken::Node(_, _) => {
+            CST::Node(_, _) => {
                 let ret = parse_exp(elem);
                 cur_exp = Some(Exp::Subscript {
                     value: Box::new(cur_exp.unwrap()),
@@ -544,14 +551,14 @@ fn parse_subscript_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> 
     cur_exp.unwrap()
 }
 /// parse compare exp
-fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut ops = Vec::new();
     let mut left = None;
     let mut comparators = Vec::new();
     let mut expect_node = true; // ping-pong parse node and op token
     for elem in cur_child_vec {
         match elem {
-            CSTNodeOrToken::Node(kind, grandchilds) => {
+            CST::Node(kind, grandchilds) => {
                 if left.is_none() {
                     left = Some(parse_exp(elem));
                 } else {
@@ -560,7 +567,7 @@ fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
                 assert_eq!(expect_node, true);
                 expect_node = false;
             }
-            CSTNodeOrToken::Token(kind, _) => {
+            CST::Token(kind, _) => {
                 ops.push(*kind);
                 assert_eq!(expect_node, false);
                 expect_node = true;
@@ -575,12 +582,12 @@ fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Ex
 }
 
 /// parse binary exp in right associativity
-fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp {
+fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut left = None;
     let mut op = None;
     for tok in cur_child_vec {
         match tok {
-            CSTNodeOrToken::Node(kind, grandchilds) => {
+            CST::Node(kind, grandchilds) => {
                 if left.is_none() {
                     left = Some(parse_exp(tok));
                 } else if op.is_some() {
@@ -595,7 +602,7 @@ fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp
                     unreachable!()
                 }
             }
-            CSTNodeOrToken::Token(kind, _content) => {
+            CST::Token(kind, _content) => {
                 op = Some(*kind);
             }
         }
@@ -607,8 +614,8 @@ fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CSTNodeOrToken>) -> Exp
 ///
 /// `text` is the source code
 /// TODO: change it to use simple ron style CST
-fn parse_exp(node: &CSTNodeOrToken) -> Exp {
-    if let CSTNodeOrToken::Node(node_kind, child_vec) = node {
+fn parse_exp(node: &CST) -> Exp {
+    if let CST::Node(node_kind, child_vec) = node {
         let (mut cur_node_kind, mut cur_child_vec) = (node_kind, child_vec);
         loop {
             let child_cnt = cur_child_vec.len();
@@ -616,11 +623,11 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
                 break;
             }
             match cur_child_vec.get(0).unwrap() {
-                CSTNodeOrToken::Node(kind, child_elem) => {
+                CST::Node(kind, child_elem) => {
                     (cur_node_kind, cur_child_vec) = (kind, child_elem);
                     //cur_child_vec = child_elem;
                 }
-                CSTNodeOrToken::Token(kind, content) => {
+                CST::Token(kind, content) => {
                     // 一脉单传抵达一个token，说明整个树可以简化为一个token
                     // In the case of expression, only Ident(LVal), Number is possible to be the leaf of such tree
                     match kind {
@@ -681,10 +688,10 @@ fn parse_exp(node: &CSTNodeOrToken) -> Exp {
 }
 use std::fs::File;
 use std::path::Path;
-fn load_test_cases(path: &Path) -> CSTNodeOrToken {
+fn load_test_cases(path: &Path) -> CST {
     let mut file = File::open(path).expect("Fail to open file.");
     use ron::de::from_reader;
-    let ret: CSTNodeOrToken = from_reader(file).expect("Wrong format");
+    let ret: CST = from_reader(file).expect("Wrong format");
     ret
 }
 
