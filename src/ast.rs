@@ -28,9 +28,9 @@ struct Def {
     init_val: Option<InitVal>, //const_init_val:
 }
 #[derive(Serialize, Deserialize, Debug)]
-enum ExpOrInitVal{
+enum ExpOrInitVal {
     Exp(Exp),
-    InitVal(Box<Option<InitVal>>)
+    InitVals(Vec<InitVal>),
 }
 /// -> Exp | `{` InitVal {`,` InitVal }`}`
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,32 +38,56 @@ struct InitVal(ExpOrInitVal);
 
 /// ConstInitVal or InitVal
 fn parse_init_val(node: &CST) -> InitVal {
-    if let CST::Node(kind, childs) = node{
-
-        match kind {
-            Kind::ConstExp | Kind::Expression => {
+    if let CST::Node(kind, childs) = node {
+        if *kind != Kind::ConstInitVal && *kind != Kind::InitVal {
+            panic!("Expect Init Val, const or not.");
+        }
+        let mut args = Vec::new();
+        let mut exp = None;
+        for elem in childs {
+            match elem {
+                CST::Token(kind, _) => {
+                    if matches!(kind, Kind::LCurly | Kind::RCurly | Kind::Comma) {
+                        continue;
+                    } else {
+                        unreachable!()
+                    }
+                }
+                CST::Node(kind, _) => {
+                    if matches!(*kind, Kind::ConstInitVal | Kind::InitVal) {
+                        //let ret = parse_init_val(elem);
+                        args.push(parse_init_val(elem));
+                    }else if matches!(*kind, Kind::ConstExp | Kind::Expression) {
+                        exp = Some(parse_exp(elem));
+                    }
+                }
             }
-            _ => ()
+        }
+        if args.is_empty() && exp.is_some(){
+            return InitVal(ExpOrInitVal::Exp(exp.unwrap()))
+        }else if !args.is_empty() {
+            return InitVal(ExpOrInitVal::InitVals(args))
+        }else{
+            unreachable!()
         }
     }
-    
-    unimplemented!()
+    unreachable!()
 }
 
 fn parse_def(node: &CST, is_const: bool) -> Def {
     match node {
         CST::Node(kind, childs) => {
-            if *kind!=Kind::ConstDef && *kind!=Kind::VarDef{
+            if *kind != Kind::ConstDef && *kind != Kind::VarDef {
                 panic!("Expect a def from CST!")
             }
             let mut is_first = true;
             let mut ident = String::new();
             let mut shape = Vec::new();
             let mut init_val: Option<InitVal> = None;
-            for elem in childs{
-                if is_first{
+            for elem in childs {
+                if is_first {
                     is_first = false;
-                    if let CST::Token(Kind::Ident, name) = elem{
+                    if let CST::Token(Kind::Ident, name) = elem {
                         ident = name.to_owned();
                     }
                 }
@@ -77,14 +101,14 @@ fn parse_def(node: &CST, is_const: bool) -> Def {
                         // parse init val
                         init_val = Some(parse_init_val(elem));
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
             Def {
                 is_const,
                 ident,
                 shape: Some(shape),
-                init_val
+                init_val,
             }
         }
         _ => panic!("Expect a Def"),
@@ -97,7 +121,7 @@ fn parse_decl(node: &CST) -> Decl {
         CST::Node(kind, childs) => {
             // [const] 0:BType 1:VarDef { ',' VarDef } ';'
             let mut is_const = *kind == Kind::ConstDecl;
-            if *kind!=Kind::ConstDecl && *kind!=Kind::VarDecl{
+            if *kind != Kind::ConstDecl && *kind != Kind::VarDecl {
                 panic!("Expect a decl from CST!")
             }
             let offset = {
@@ -110,15 +134,15 @@ fn parse_decl(node: &CST) -> Decl {
             let btype = parse_basic_type(childs.get(offset).unwrap());
             let mut it = childs.iter();
             let mut defs = vec![parse_def(it.next().unwrap(), is_const)];
-            while let Some(def) = it.nth(1){
+            while let Some(def) = it.nth(1) {
                 defs.push(parse_def(def, is_const));
             }
 
-            return Decl{
+            return Decl {
                 is_const,
                 btype,
-                def: defs
-            }
+                def: defs,
+            };
         }
         _ => panic!("Expect a Decl"),
     }
@@ -138,14 +162,11 @@ fn parse_basic_type(node: &CST) -> BasicType {
             "int" => BasicType::Int,
             "float" => BasicType::Float,
             "void" => BasicType::Void,
-            _ => panic!("Expect int, float or void")
+            _ => panic!("Expect int, float or void"),
         },
         _ => panic!("Expect CST Basic Type!"),
     }
 }
-
-
-
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FuncDef {
@@ -201,8 +222,7 @@ fn parse_block(node: &CST) -> Block {
             let mut block_item: Vec<DeclOrStatement> = Vec::new();
             for elem in childs {
                 match elem {
-                    CST::Token(Kind::LCurly, _)
-                    | CST::Token(Kind::RCurly, _) => (),
+                    CST::Token(Kind::LCurly, _) | CST::Token(Kind::RCurly, _) => (),
                     CST::Node(Kind::BlockItem, grandchilds) => {
                         let only_child = grandchilds.get(0).unwrap();
                         match only_child {
@@ -371,12 +391,18 @@ fn is_unary_op(kind: Kind) -> bool {
 
 /// +-*/%
 fn is_bin_op(kind: Kind) -> bool {
-    matches!(kind, Kind::OpAdd | Kind::OpSub | Kind::OpMul | Kind::OpDiv | Kind::OpMod)
+    matches!(
+        kind,
+        Kind::OpAdd | Kind::OpSub | Kind::OpMul | Kind::OpDiv | Kind::OpMod
+    )
 }
 
 /// `<` `>` `>=` `<=` `!=` `==`
 fn is_cmp_op(kind: Kind) -> bool {
-    matches!(kind, Kind::OpLT | Kind::OpGT | Kind::OpNL | Kind::OpNG | Kind::OpNE | Kind::OpEQ)
+    matches!(
+        kind,
+        Kind::OpLT | Kind::OpGT | Kind::OpNL | Kind::OpNG | Kind::OpNE | Kind::OpEQ
+    )
 }
 
 /// transform a syntaxNode tree into a rusty object notion style simpler tree
