@@ -12,30 +12,30 @@ struct CompUnit {
     items: Vec<DeclOrFuncDef>,
 }
 #[derive(Serialize, Deserialize, Debug)]
-enum DeclOrFuncDef{
+enum DeclOrFuncDef {
     Decl(Decl),
-    FuncDef(FuncDef)
+    FuncDef(FuncDef),
 }
-fn parse_comp_unit(node : &CST)->CompUnit{
+fn parse_comp_unit(node: &CST) -> CompUnit {
     match node {
         CST::Node(Kind::CompUnit, childs) => {
             let mut items = Vec::new();
-            for elem in childs{
-                match elem { 
+            for elem in childs {
+                match elem {
                     CST::Node(Kind::Decl, _) => {
                         let res = DeclOrFuncDef::Decl(parse_decl(&elem));
                         items.push(res);
                     }
-                    CST::Node(Kind::FuncDef,_) => {
+                    CST::Node(Kind::FuncDef, _) => {
                         let res = DeclOrFuncDef::FuncDef(parse_func_def(&elem));
                         items.push(res);
                     }
-                    _ => panic!("Expect Decl or FuncDef")
+                    _ => panic!("Expect Decl or FuncDef"),
                 }
             }
-            CompUnit{items}
+            CompUnit { items }
         }
-        _ => panic!("Expect CompUnit")
+        _ => panic!("Expect CompUnit"),
     }
 }
 
@@ -199,7 +199,8 @@ fn parse_basic_type(node: &CST) -> BasicType {
 struct FuncDef {
     func_type: BasicType,
     ident: String,
-    formal_params: Option<Vec<FuncFParam>>,
+    formal_params: Vec<FuncFParam>,// if is_empty() then zero args
+    block: Block,
 }
 
 fn parse_func_def(node: &CST) -> FuncDef {
@@ -233,7 +234,16 @@ fn parse_func_def(node: &CST) -> FuncDef {
             CST::Token(Kind::RParen, _) => (),
             _ => unreachable!(),
         }
-
+        if let Some(elem) = it.next(){
+            let block = parse_block(elem);
+            return FuncDef{
+                func_type: btype,
+                ident,
+                formal_params,
+                block
+            }
+        }
+        unreachable!()
         //assert_eq!(CST::Token(Kind::RParen, ")"), it.next().unwrap());
     }
     unreachable!()
@@ -286,15 +296,13 @@ fn parse_func_formal_param(node: &CST) -> FuncFParam {
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct Block {
-    items: Option<Vec<(BlockItem)>>,
+    items: Vec<(DeclOrStatement)>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 enum DeclOrStatement {
     Decl(Decl),
     Statement(Statement),
 }
-#[derive(Serialize, Deserialize, Debug)]
-struct BlockItem(DeclOrStatement);
 #[derive(Serialize, Deserialize, Debug)]
 enum Statement {
     Empty, //`;`
@@ -322,7 +330,7 @@ enum Statement {
 /// CST: `{` BlockItem `}`
 fn parse_block(node: &CST) -> Block {
     match node {
-        CST::Node(Kind::Statement, childs) => {
+        CST::Node(Kind::Block, childs) => {
             let mut block_item: Vec<DeclOrStatement> = Vec::new();
             for elem in childs {
                 match elem {
@@ -343,6 +351,9 @@ fn parse_block(node: &CST) -> Block {
                     }
                     _ => panic!("Expect CST BlockItem or Curly!"),
                 }
+            }
+            return Block{
+                items: block_item
             }
         }
         _ => panic!("Expect a CST Block!"),
@@ -373,9 +384,7 @@ fn parse_stmt(node: &CST) -> Statement {
                                 let value = parse_exp(elem);
                                 return Statement::Exp(value);
                             }
-                            Kind::Block => {
-                                return Statement::Block(parse_block(elem))
-                            }
+                            Kind::Block => return Statement::Block(parse_block(elem)),
                             _ => unreachable!(),
                         }
                     }
@@ -826,6 +835,25 @@ fn load_test_cases(path: &Path) -> CST {
 }
 
 #[test]
+fn test_every_func() {
+    use ron::de::from_str;
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let res = load_test_cases(Path::new("test_cases/ast/playground.ron"));
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        .enumerate_arrays(true);
+    println!(
+        "Ron Tree:\n{}",
+        to_string_pretty(&res, pretty.to_owned()).unwrap()
+    );
+    let exp = parse_block(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&exp, pretty.to_owned()).unwrap()
+    );
+}
+
+#[test]
 fn test_subscript_exp() {
     use ron::de::from_str;
     use ron::ser::{to_string_pretty, PrettyConfig};
@@ -1046,8 +1074,9 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            a[1][2+3];
+            if(1){2;}
         }";
+    
     let parse = parse(text);
     let node = parse.syntax();
     let res = into_ron_tree(&node, text, true);
@@ -1060,7 +1089,11 @@ fn test_integrate() {
         "Ron Tree:\n{}",
         to_string_pretty(&res, pretty.to_owned()).unwrap()
     );
-
+    let cu = parse_comp_unit(&res);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&cu, pretty.to_owned()).unwrap()
+    );
     //let mut out  = String::new();
     //output_cst(&node, 0, text, &mut out, "│");
     //println!("CST:{}", out);

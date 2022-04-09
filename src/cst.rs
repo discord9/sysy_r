@@ -312,7 +312,7 @@ impl Parser {
             Some(Semicolon) => self.bump(),
             Some(LCurly) => self.block(),
             Some(IfKeyword) => {
-                self.bump();
+                self.bump();// if
                 self.bump_expect(LParen, "");
                 self.cond();
                 self.bump_expect(RParen, "");
@@ -896,8 +896,10 @@ mod tests {
     fn test_unary_exp() {
         println!("Test 1");
         // test LeftValue-> Ident
-        let text = " print ( hello )";
-        let res = test_sop(text, Parser::unary_exp, "|", true);
+        let text = "int main(){
+            if(1){2;}
+        }";
+        let res = test_sop(text, Parser::comp_unit, "|", true);
     }
     #[test]
     fn test_rel_eq_exp() {
