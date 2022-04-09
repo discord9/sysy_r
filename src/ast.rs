@@ -36,6 +36,13 @@ enum ExpOrInitVal{
 #[derive(Serialize, Deserialize, Debug)]
 struct InitVal(ExpOrInitVal);
 
+fn parse_init_val(node: &CSTNodeOrToken) -> InitVal {
+    match *node {
+        _ => ()
+    }
+    unimplemented!()
+}
+
 fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
     match node {
         CSTNodeOrToken::Node(kind, childs) => {
@@ -61,15 +68,20 @@ fn parse_def(node: &CSTNodeOrToken, is_const: bool) -> Def {
                     }
                     CSTNodeOrToken::Node(Kind::ConstInitVal, _) | CSTNodeOrToken::Node(Kind::InitVal, _) => {
                         // parse init val
-                        unimplemented!()
+                        init_val = Some(parse_init_val(elem));
                     }
                     _ => ()
                 }
             }
+            Def {
+                is_const,
+                ident,
+                shape: Some(shape),
+                init_val
+            }
         }
         _ => panic!("Expect a Def"),
     }
-    unimplemented!()
 }
 
 /// ConstDecl or VarDecl
@@ -89,11 +101,21 @@ fn parse_decl(node: &CSTNodeOrToken) -> Decl {
                 }
             };
             let btype = parse_basic_type(childs.get(offset).unwrap());
-            unimplemented!()
+            let mut it = childs.iter();
+            let mut defs = vec![parse_def(it.next().unwrap(), is_const)];
+            while let Some(def) = it.nth(1){
+                defs.push(parse_def(def, is_const));
+            }
+
+            return Decl{
+                is_const,
+                btype,
+                def: defs
+            }
         }
         _ => panic!("Expect a Decl"),
     }
-    unimplemented!()
+    unreachable!()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,9 +128,9 @@ enum BasicType {
 fn parse_basic_type(node: &CSTNodeOrToken) -> BasicType {
     match node {
         CSTNodeOrToken::Token(Kind::BType, val) => match val.as_str() {
-            "int" => return BasicType::Int,
-            "float" => return BasicType::Float,
-            "void" => return BasicType::Void,
+            "int" => BasicType::Int,
+            "float" => BasicType::Float,
+            "void" => BasicType::Void,
             _ => panic!("Expect int, float or void")
         },
         _ => panic!("Expect CST Basic Type!"),
@@ -180,7 +202,6 @@ fn parse_block(node: &CSTNodeOrToken) -> Block {
                             CSTNodeOrToken::Node(Kind::Decl, _) => {
                                 let res = parse_decl(only_child);
                                 block_item.push(DeclOrStatement::Decl(res));
-                                unimplemented!()
                             }
                             CSTNodeOrToken::Node(Kind::Statement, _) => {
                                 let res = parse_stmt(only_child);
@@ -195,7 +216,7 @@ fn parse_block(node: &CSTNodeOrToken) -> Block {
         }
         _ => panic!("Expect a CST Block!"),
     }
-    unimplemented!()
+    unreachable!()
 }
 
 /// parse statement
@@ -238,11 +259,11 @@ fn parse_stmt(node: &CSTNodeOrToken) -> Statement {
                             let stmt = parse_stmt(stmt);
                             let mut cst_else_stmt: Option<_> = childs.get(6);
                             let mut ast_else_stmt = None;
-                            if cst_else_stmt.is_some() {
-                                ast_else_stmt = Some(parse_stmt(cst_else_stmt.unwrap()));
+                            if let Some(cst_else_stmt) = cst_else_stmt {
+                                ast_else_stmt = Some(parse_stmt(cst_else_stmt));
                             }
                             return Statement::IfStmt {
-                                cond: cond,
+                                cond,
                                 stmt: Box::new(stmt),
                                 else_stmt: Box::new(ast_else_stmt),
                             };
@@ -334,30 +355,21 @@ pub enum CSTNodeOrToken {
 
 /// see if it is a whitespace or comment
 fn is_ws_cmt(kind: Kind) -> bool {
-    kind == Kind::Whitespace || kind == Kind::Comment
+    matches!(kind, Kind::Whitespace | Kind::Comment)
 }
 
 fn is_unary_op(kind: Kind) -> bool {
-    match kind {
-        Kind::OpAdd | Kind::OpSub | Kind::OpNot => true,
-        _ => false,
-    }
+    matches!(kind, Kind::OpAdd | Kind::OpSub | Kind::OpNot)
 }
 
 /// +-*/%
 fn is_bin_op(kind: Kind) -> bool {
-    match kind {
-        Kind::OpAdd | Kind::OpSub | Kind::OpMul | Kind::OpDiv | Kind::OpMod => true,
-        _ => false,
-    }
+    matches!(kind, Kind::OpAdd | Kind::OpSub | Kind::OpMul | Kind::OpDiv | Kind::OpMod)
 }
 
 /// `<` `>` `>=` `<=` `!=` `==`
 fn is_cmp_op(kind: Kind) -> bool {
-    match kind {
-        Kind::OpLT | Kind::OpGT | Kind::OpNL | Kind::OpNG | Kind::OpNE | Kind::OpEQ => true,
-        _ => false,
-    }
+    matches!(kind, Kind::OpLT | Kind::OpGT | Kind::OpNL | Kind::OpNG | Kind::OpNE | Kind::OpEQ)
 }
 
 /// transform a syntaxNode tree into a rusty object notion style simpler tree
