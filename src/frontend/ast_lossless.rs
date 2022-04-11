@@ -1,171 +1,176 @@
 //! a attempt to build a ast that select few nodes from cst
-//! 
-//! Refactory AST to 
+//!
+//! Refactory AST to
 //! ```
 //! pub struct $node {
 //!     pub id: usize,
 //!     pub kind: $node Kind,
-//!     pub elem: CSTElement
+//!     pub elem: CSTElement,
 //! }
 //! ```
 //! layer AST on top of `SyntaxNode` API.
 #![allow(unused)]
 use crate::cst::{parse, SyntaxElement, SyntaxNode, SyntaxToken};
-use serde::{Deserialize, Serialize};
 use crate::syntax::SyntaxKind as Kind;
+use serde::{Deserialize, Serialize};
 
 /// a wrapper for syntax element
-#[derive(Debug)]
-struct CSTElement(SyntaxElement);
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Span(
+    usize,
+    usize, //SyntaxElement
+           // TODO ser for SyntaxElement
+);
 
 // TODO: impl serialize manually for ASTNode
 macro_rules! decl_ast_node {
-    ($($ast: ident ),*) => {
-        #[derive(Debug)]
-        enum ASTNode {
-            $(
-                $ast ( $ast, SyntaxElement)
-            ),*
+    ($(($ast: ident, $astkind: ident) ),*) => {
+    $(
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct $ast {
+            pub id: usize,
+            pub kind: $astkind,
+            pub elem: Span
         }
+    )*
     }
 }
-
-decl_ast_node!(
-    CompUnit,
-    DeclOrFuncDef,
-    Decl,
-    FuncDef,
-    Def,
-    ExpOrInitVal,
-    BasicType,
-    FuncFParam,
-    Block,
-    DeclOrStatement,
-    Statement,
-    IntOrFloat,
-    Exp
-);
 
 // TODO: write a better iterator for CST
 // TODO: write a better state machine for choosing CST node and convert to AST
 #[derive(Serialize, Deserialize, Debug)]
-struct CompUnit {
+pub struct CompUnitKind {
     items: Vec<DeclOrFuncDef>,
 }
+decl_ast_node!((CompUnit, CompUnitKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-enum DeclOrFuncDef {
+pub enum DeclOrFuncDefKind {
     Decl(Decl),
     FuncDef(FuncDef),
 }
+decl_ast_node!((DeclOrFuncDef, DeclOrFuncDefKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Decl {
+pub struct DeclKind {
     is_const: bool,
     btype: BasicType,
     def: Vec<Def>,
 }
+decl_ast_node!((Decl, DeclKind));
 #[derive(Serialize, Deserialize, Debug)]
-struct FuncDef {
+pub struct FuncDefKind {
     func_type: BasicType,
     ident: String,
     formal_params: Vec<FuncFParam>, // if is_empty() then zero args
     block: Block,
 }
 
+decl_ast_node!((FuncDef, FuncDefKind));
+
 /// ConstDef or VarDef
 #[derive(Serialize, Deserialize, Debug)]
-struct Def {
+pub struct DefKind {
     is_const: bool, // if not const InitVal can be optional
     ident: String,
-    shape: Option<Vec<Exp>>,   // const
+    shape: Option<Vec<Expr>>,   // const
     init_val: Option<InitVal>, //const_init_val:
 }
 
+decl_ast_node!((Def, DefKind));
+
 #[derive(Serialize, Deserialize, Debug)]
-pub enum ExpOrInitVal {
-    Exp(Exp),
-    InitVals(Vec<InitVal>),
+pub enum ExpOrInitValKind {
+    Exp(Expr),
+    InitVals(Vec<ExpOrInitVal>),
 }
+
+decl_ast_node!((ExpOrInitVal, ExpOrInitValKind));
 
 type InitVal = ExpOrInitVal;
 
 #[derive(Serialize, Deserialize, Debug)]
-enum BasicType {
+pub enum BasicTypeKind {
     Int,
     Float,
     Void,
 }
+decl_ast_node!((BasicType, BasicTypeKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-struct FuncFParam {
+pub struct FuncFParamKind {
     btype: BasicType,
     ident: String,
-    array_shape: Option<Vec<Exp>>,
+    array_shape: Option<Vec<Expr>>,
     // if None, then it is a normal var
     // if not None, default to have `[]` and then zero to multiple `[`Exp`]`
 }
+decl_ast_node!((FuncFParam, FuncFParamKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Block {
+pub struct BlockKind {
     items: Vec<(DeclOrStatement)>,
 }
+decl_ast_node!((Block, BlockKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-enum DeclOrStatement {
+pub enum DeclOrStatementKind {
     Decl(Decl),
     Statement(Statement),
 }
+decl_ast_node!((DeclOrStatement, DeclOrStatementKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-enum Statement {
+pub enum StatementKind {
     Empty, //`;`
     /// LVal '=' Exp ';'
     Assign {
-        target: Exp,
-        value: Exp,
+        target: Expr,
+        value: Expr,
     },
-    Exp(Exp),
+    Exp(Expr),
     Block(Block),
     IfStmt {
-        cond: Exp,
+        cond: Expr,
         stmt: Box<Statement>,
         else_stmt: Box<Option<Statement>>,
     },
     WhileStmt {
-        cond: Exp,
+        cond: Expr,
         stmt: Box<Statement>,
     },
     BreakStmt,
     ContinueStmt,
-    ReturnStmt(Option<Exp>),
+    ReturnStmt(Option<Expr>),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum Exp {
+decl_ast_node!((Statement, StatementKind));
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ExprKind {
     /// Call to function
     ///
     /// `f(args)`
-    Call { id: String, args: Vec<Exp> },
+    Call { id: String, args: Vec<Expr> },
     /// Binary Operator. Note: in CST BinOp is a vec of exp, like vec!\[1+2+3\]
     ///
     /// `+` `-` `*` `/` `%`
     BinOp {
         op: Kind, // OpAdd OpSub OpMul OpDiv OpMod
-        left: Box<Exp>,
-        right: Box<Exp>,
+        left: Box<Expr>,
+        right: Box<Expr>,
     },
     /// `&&` `||`
     BoolOp {
         op: Kind, // OpAnd OpOr
-        args: Vec<Exp>,
+        args: Vec<Expr>,
     },
     /// Unary operator
     ///
     /// `+1` `-1` `!flag`
     UnaryOp {
         op: Kind, // OpSub OpAdd OpNot
-        val: Box<Exp>,
+        val: Box<Expr>,
     },
     /// Compare operator can be chain like: 1<2<3
     ///
@@ -174,19 +179,23 @@ pub enum Exp {
     /// => op: LT,LT;left:1, comparators:[2,3]
     CmpOp {
         op: Vec<Kind>, // OpLT OpGT OpNG OpNL OpEQ OpNE
-        left: Box<Exp>,
-        comparators: Vec<Exp>,
+        left: Box<Expr>,
+        comparators: Vec<Expr>,
     },
     /// int or float
     Constant(IntOrFloat),
     /// Ident
     Name(String),
     /// `a[b]`
-    Subscript { value: Box<Exp>, slice: Box<Exp> },
+    Subscript { value: Box<Expr>, slice: Box<Expr> },
 }
 
+decl_ast_node!((Expr, ExprKind));
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub enum IntOrFloat {
+pub enum IntOrFloatKind {
     Int(i32),
     Float(f32),
 }
+
+decl_ast_node!((IntOrFloat, IntOrFloatKind));
