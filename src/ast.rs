@@ -7,6 +7,7 @@ use crate::syntax::SyntaxKind as Kind;
 use either::Either;
 use serde::{Deserialize, Serialize};
 
+
 #[derive(Serialize, Deserialize, Debug)]
 struct CompUnit {
     items: Vec<DeclOrFuncDef>,
@@ -55,13 +56,13 @@ struct Def {
     init_val: Option<InitVal>, //const_init_val:
 }
 #[derive(Serialize, Deserialize, Debug)]
-enum ExpOrInitVal {
+pub enum ExpOrInitVal {
     Exp(Exp),
     InitVals(Vec<InitVal>),
 }
 /// -> Exp | `{` InitVal {`,` InitVal }`}`
 #[derive(Serialize, Deserialize, Debug)]
-struct InitVal(ExpOrInitVal);
+pub struct InitVal(ExpOrInitVal);
 
 /// ConstInitVal or InitVal
 fn parse_init_val(node: &CST) -> InitVal {
@@ -438,7 +439,7 @@ fn parse_stmt(node: &CST) -> Statement {
 }
 /// merge all *Exp into one. is it wise?NO, but as a enum with all possible variant? YESYES
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-enum Exp {
+pub enum Exp {
     /// Call to function
     ///
     /// `f(args)`
@@ -482,7 +483,7 @@ enum Exp {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-enum IntOrFloat {
+pub enum IntOrFloat {
     Int(i32),
     Float(f32),
 }
@@ -519,7 +520,7 @@ fn is_cmp_op(kind: Kind) -> bool {
 }
 
 /// transform a syntaxNode tree into a rusty object notion style simpler tree
-fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CST {
+pub fn into_ron_tree(node: &SyntaxNode, text: &str, skip_ws_cmt: bool) -> CST {
     let kind = node.kind();
     //let mut ret = CSTNodeOrToken::Node(kind, Vec::new());
     let mut child_elem: Vec<CST> = Vec::new();
@@ -720,7 +721,7 @@ fn parse_compare_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     }
 }
 
-/// parse binary exp in right associativity
+/// parse binary exp in left associativity
 fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
     let mut left = None;
     let mut op = None;
@@ -753,7 +754,7 @@ fn parse_binary_exp_node(kind: Kind, cur_child_vec: &Vec<CST>) -> Exp {
 ///
 /// `text` is the source code
 /// TODO: change it to use simple ron style CST
-fn parse_exp(node: &CST) -> Exp {
+pub fn parse_exp(node: &CST) -> Exp {
     if let CST::Node(node_kind, child_vec) = node {
         let (mut cur_node_kind, mut cur_child_vec) = (node_kind, child_vec);
         loop {
@@ -797,7 +798,7 @@ fn parse_exp(node: &CST) -> Exp {
             // in cst have similar storage pattern:
             // exp op exp op...
             // all deals in different way
-            // BinOp: .... to right associtivity
+            // BinOp: .... to left associtivity
             // TODO: test this arm
             Kind::MulExp | Kind::AddExp => {
                 return parse_binary_exp_node(*cur_node_kind, cur_child_vec)
@@ -1074,7 +1075,7 @@ fn test_integrate() {
     use ron::ser::{to_string_pretty, PrettyConfig};
     let text = "
         int main(){
-            continue;
+            print(HELLO_WORLD);
         }";
     
     let parse = parse(text);
