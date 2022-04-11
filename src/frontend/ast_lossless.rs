@@ -1,13 +1,21 @@
 //! a attempt to build a ast that select few nodes from cst
-//!
+//! 
+//! Refactory AST to 
+//! ```
+//! pub struct $node {
+//!     pub id: usize,
+//!     pub kind: $node Kind,
+//!     pub elem: CSTElement
+//! }
+//! ```
 //! layer AST on top of `SyntaxNode` API.
 #![allow(unused)]
 use crate::cst::{parse, SyntaxElement, SyntaxNode, SyntaxToken};
-use crate::syntax::SyntaxKind as Kind;
-use either::Either;
 use serde::{Deserialize, Serialize};
+use crate::syntax::SyntaxKind as Kind;
 
-#[derive(Serialize, Deserialize, Debug)]
+/// a wrapper for syntax element
+#[derive(Debug)]
 struct CSTElement(SyntaxElement);
 
 // TODO: impl serialize manually for ASTNode
