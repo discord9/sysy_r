@@ -1,5 +1,7 @@
 //! helper function(iterator?) to match childs of a SyntaxNode and return SyntaxElement
 //! 
+#![allow(unused)]
+// TODO: remove after completed
 use crate::syntax::SyntaxKind as Kind;
 pub enum RegPat{
     Rep {
