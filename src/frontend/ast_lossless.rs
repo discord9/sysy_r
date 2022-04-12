@@ -9,13 +9,11 @@
 //! }
 //! ```
 //! layer AST on top of `SyntaxNode` API.
-#![allow(unused)]
-use std::ptr::NonNull;
 
 // TODO: Remove after completed
-use crate::cst::{parse, SyntaxElement, SyntaxNode, SyntaxToken};
+use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
-use rowan::{TextLen, TextRange};
+use rowan::{TextRange};
 use serde::{Deserialize, Serialize};
 
 /// a wrapper for syntax element
@@ -28,14 +26,26 @@ impl From<TextRange> for Span {
     }
 }
 
+impl From<SyntaxNode> for Span {
+    fn from(node: SyntaxNode) -> Self {
+        Self(node.text_range().start().into(), node.text_range().end().into())
+    }
+}
+
+impl From<SyntaxToken> for Span {
+    fn from(node: SyntaxToken) -> Self {
+        Self(node.text_range().start().into(), node.text_range().end().into())
+    }
+}
+
 // TODO: impl serialize manually for ASTNode
 macro_rules! decl_ast_node {
     ($(($ast: ident, $astkind: ident) ),*) => {
     $(
         #[derive(Serialize, Deserialize, Debug)]
         pub struct $ast {
-            pub id: usize,
             pub kind: $astkind,
+            pub id: usize,
             pub span: Span
         }
     )*
@@ -136,7 +146,7 @@ pub enum StatementKind {
         target: Expr,
         value: Expr,
     },
-    Exp(Expr),
+    Expr(Expr),
     Block(Block),
     IfStmt {
         cond: Expr,
@@ -210,6 +220,7 @@ decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
 type NodeId = usize;
 /// Convert CST to AST
+#[allow(unused)]
 pub struct AST {
     first_unalloc_node_id: NodeId,
 }
@@ -296,11 +307,12 @@ impl AST {
     ///
     /// NOTE: skip white space and comment
     fn get_first_token_skip_ws_cmt(node: &SyntaxNode) -> Option<SyntaxToken> {
-        Self::get_child_elem(node, true, true, false)
-            .get(0)
-            .unwrap()
-            .as_token()
+        let ret = Self::get_child_elem(node, true, true, false)
+            .get(0).cloned();
+        if let Some(tok) = ret{
+            tok.as_token()
             .cloned()
+        }else{None}
     }
 
     /// constDecl Decl FuncDef
@@ -375,12 +387,12 @@ impl AST {
             .collect();
         let func_type = self.parse_btype_token(child_tokens.get(0).unwrap());
         let ident = child_tokens.get(1).unwrap().text().to_string();
-        let mut formal_params = None;
+        let mut formal_params = Vec::new();
         let mut block = None;
         for child_node in node.children() {
             match child_node.kind() {
                 Kind::FuncFParams => {
-                    formal_params = Some(self.parse_formal_params(&child_node));
+                    formal_params = self.parse_formal_params(&child_node);
                 }
                 Kind::Block => {
                     block = Some(self.parse_block(&child_node));
@@ -392,7 +404,7 @@ impl AST {
         let kind = FuncDefKind {
             func_type,
             ident,
-            formal_params: formal_params.unwrap(),
+            formal_params: formal_params,
             block: block.unwrap(),
         };
         return FuncDef {
@@ -632,7 +644,18 @@ impl AST {
                     span: node.text_range().into(),
                 };
             }
-            _ => panic!("Expect statement CST node"),
+            _ => {
+                let first_child = node.first_child().unwrap();
+                if first_child.kind()==Kind::Expression{
+                    let kind = StatementKind::Expr(self.parse_expr(&first_child));
+                    return Statement{
+                        id: self.alloc_node_id(),
+                        kind,
+                        span: first_child.into()
+                    }
+                }
+
+                panic!("Expect statement CST node")},
         }
     }
 
@@ -805,6 +828,7 @@ impl AST {
     /// 2. have only one child but the child is a token
     pub fn parse_expr(&mut self, node: &SyntaxNode) -> Expr {
         {
+            //println!("Call expr on {:?}", node.kind());
             let mut node = node.clone();
             let mut childs = Self::get_child_elem(&node, true, true, true);
 
@@ -831,7 +855,13 @@ impl AST {
                         };
                     }
                     Kind::Number => {
-                        return self.parse_expr(&cur_node);
+                        let ret = self.parse_number(&cur_node);
+                        let kind = ExprKind::Constant(ret);
+                        return Expr{
+                            id: self.alloc_node_id(),
+                            kind,
+                            span: cur_node.into()
+                        }
                     }
                     _ => (),
                 }
@@ -859,8 +889,9 @@ impl AST {
     }
 
     /// Accept a Number compsite node
-    pub fn parse_number(&mut self, elem: &SyntaxElement) -> IntOrFloat {
-        if let Some(node) = elem.as_node() {
+    pub fn parse_number(&mut self, node: &SyntaxNode) -> IntOrFloat {
+         
+            //let node = elem;
             if !matches!(node.kind(), Kind::Number) {
                 panic!("Expect a number node");
             }
@@ -875,7 +906,7 @@ impl AST {
                 kind: reskind,
                 span: tok.text_range().into(),
             };
-        }
+        
         panic!("Expect a Number CST Node.")
     }
 }
@@ -883,10 +914,18 @@ impl AST {
 #[test]
 fn test_integrate_manual() {
     use crate::cst::{output_cst, parse};
-    let text = "
-        int main(int argv,int args[]){
-        }";
+    let _full = "int main(int argv,int args[]){
+        if(ARMv8==1)print(HELLO_WORLD);
+        while(1){
+            continue;
+        }
+        if(1+2*3%4/5==6)return 0;
+    }";
+    let text = "int main(){
+        if(1+2*3%4/5==6)return 0;
+    }";
     let parse = parse(text);
+    println!("Errors: {:?}", parse.errors);
     let node = parse.syntax();
     let mut cst_print = String::new();
     output_cst(&node, 0, text, &mut cst_print, "│");

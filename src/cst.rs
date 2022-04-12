@@ -821,7 +821,7 @@ mod tests {
             }
         }
         let ret = ser_cst(&node, text);
-        println!("{}", to_string_pretty(&ret, pretty).unwrap());
+        //println!("{}", to_string_pretty(&ret, pretty).unwrap());
         let mut res = String::new();
         output_cst(&node, 0, text, &mut res, tab);
         print!("CST:\n{}\n", res);
@@ -925,8 +925,8 @@ mod tests {
     fn test_rel_eq_exp() {
         println!("Test 1");
         // test LeftValue-> Ident
-        let text = "1<2<3";
-        let res = test_sop(text, Parser::rel_exp, "|", true);
+        let text = "1==2";
+        let res = test_sop(text, Parser::logic_or_exp, "|", true);
     }
     #[test]
     fn test_add_exp() {
