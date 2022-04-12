@@ -353,8 +353,40 @@ impl AST {
         Expr {
             id: self.alloc_node_id(),
             kind: reskind,
-            span: node.text_range().into()
+            span: node.text_range().into(),
         }
+    }
+
+    /// parse binary exp in left associativity
+    /// exp0 -> exp + exp - exp
+    ///  (-, (+, exp,exp), exp)
+    pub fn parse_binary_exp(&mut self, node: &SyntaxNode) -> Expr {
+        let childs = Self::get_child_elem(node, true, true, true);
+        let start_loc: usize = childs.get(0).unwrap().text_range().start().into();
+        /// mark the range of end and start for span
+        let mut end_loc = start_loc;
+        let mut it = childs.iter();
+        let first = it.next().unwrap().as_node().unwrap();
+        end_loc = first.text_range().end().into();
+        let mut left = self.parse_expr(first);
+        
+        while let Some(next) = it.next() {
+            let op = next.as_token().unwrap().kind();
+            let next = it.next().unwrap().as_node().unwrap();
+            end_loc = next.text_range().end().into();
+            let right = self.parse_expr(next);
+            let reskind = ExprKind::BinOp {
+                op: op,
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+            left = Expr {
+                id: self.alloc_node_id(),
+                kind: reskind,
+                span: Span(start_loc, end_loc)
+            };
+        }
+        left
     }
 
     /// go over the single child tree until find a node that is:
