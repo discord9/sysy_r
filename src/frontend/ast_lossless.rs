@@ -288,6 +288,86 @@ impl AST {
             .cloned()
     }
 
+    ///
+    pub fn parse_stmt(&mut self, node: &SyntaxNode) -> Statement {
+        assert_eq!(node.kind(), Kind::Statement);
+        let first = Self::get_first_token_skip_ws_cmt(node).unwrap();
+        let mut it = node.children();
+        match first.kind() {
+            Kind::OpAsg => {
+                let lval = self.parse_subscript_exp(&it.next().unwrap());
+                let exp = self.parse_expr(&it.next().unwrap());
+                let reskind = StatementKind::Assign {
+                    target: lval,
+                    value: exp,
+                };
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into(),
+                };
+            }
+            Kind::LCurly => {
+                // parse block
+                todo!()
+            }
+            Kind::IfKeyword => {
+                let cond = self.parse_expr(&it.next().unwrap());
+                let stmt = self.parse_stmt(&it.next().unwrap());
+                let else_stmt = {
+                    if let Some(stmt) = it.next() {
+                        Some(self.parse_stmt(&stmt))
+                    } else {
+                        None
+                    }
+                };
+                let reskind = StatementKind::IfStmt { cond: cond, stmt: Box::new(stmt), else_stmt: Box::new(else_stmt) };
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into()
+                }
+            }
+            Kind::WhileKeyword => {
+                let cond = self.parse_expr(&it.next().unwrap());
+                let stmt = self.parse_stmt(&it.next().unwrap());
+                let reskind = StatementKind::WhileStmt { cond, stmt: Box::new(stmt) };
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into()
+                }
+            }
+            Kind::BreakKeyword => {
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: StatementKind::BreakStmt,
+                    span: node.text_range().into()
+                }
+            }
+            Kind::ContinueKeyword => {
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: StatementKind::ContinueStmt,
+                    span: node.text_range().into()
+                }
+            }
+            Kind::ReturnKeyword => {
+                let exp_opt = {
+                    if let Some(exp_cst) = it.next(){
+                        Some(self.parse_expr(&exp_cst))
+                    }else{None}
+                };
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: StatementKind::ReturnStmt(exp_opt),
+                    span: node.text_range().into()
+                }
+            }
+            _ => panic!("Expect statement CST node"),
+        }
+    }
+
     /// UnaryExp -> UnaryOp UnaryExp
     ///
     /// | Ident `(` FuncRParams `)`
