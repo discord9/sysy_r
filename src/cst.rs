@@ -509,9 +509,9 @@ impl Parser {
     }
     /// BType -> `int` | `float`
     fn b_type(&mut self) {
-        self.builder.start_node(Kind::BType.into());
+        //self.builder.start_node(Kind::BType.into());
         self.bump_expect(Kind::BType, "Expect `int` or `float`");
-        self.builder.finish_node();
+        //self.builder.finish_node();
     }
 
     /// Expression -> AddExp
