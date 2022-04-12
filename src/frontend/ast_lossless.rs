@@ -288,20 +288,62 @@ impl AST {
             .cloned()
     }
 
+    /// UnaryExp -> UnaryOp UnaryExp | Ident `(` FuncRParams `)`
+    pub fn parse_unary_exp(&mut self, node: &SyntaxNode) -> Expr {
+        let first = Self::get_first_token_skip_ws_cmt(&node);
+        if let Some(token) = first {
+            // UnaryExp -> UnaryOp UnaryExp
+            // UnaryOp -> `+` | `-` | `!`
+            if matches!(token.kind(), Kind::OpAdd | Kind::OpSub | Kind::OpNot) {
+                let val = self.parse_expr(&node.first_child().unwrap());
+                let reskind = ExprKind::UnaryOp {
+                    op: token.kind(),
+                    val: Box::new(val),
+                };
+                return Expr {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into(),
+                };
+            } else if matches!(token.kind(), Kind::Ident) {
+                // UnaryExp -> Ident `(` FuncRParams `)`
+                // FuncRParams → Exp { ',' Exp }
+                let id = Self::get_first_token_skip_ws_cmt(&node).unwrap();
+                let func_real_params = node.first_child().unwrap();
+                let mut args = Vec::new();
+                for exp_cst in func_real_params.children() {
+                    args.push(self.parse_expr(&exp_cst));
+                }
+                let reskind = ExprKind::Call {
+                    id: id.text().to_string(),
+                    args: args,
+                };
+                return Expr {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into(),
+                }
+            }else{
+                unreachable!()
+            }
+        };
+        unreachable!()
+    }
     /// go over the single child tree until find a node that is:
     ///
     /// 1. have more than one childs
     ///
     /// or
     /// 2. have only one child but the child is a token
-    pub fn parse_expr(&mut self, elem: &SyntaxElement) -> Expr {
-        if let Some(node) = elem.as_node() {
+    pub fn parse_expr(&mut self, node: &SyntaxNode) -> Expr {
+        {
             let mut node = node.clone();
             let mut childs = Self::get_child_elem(&node, true, true, true);
 
             while childs.len() == 1 {
                 if let Some(child_node) = node.first_child() {
                     node = child_node;
+                    childs = Self::get_child_elem(&node, true, true, true);
                 } else {
                     break;
                 }
@@ -321,17 +363,34 @@ impl AST {
                         };
                     }
                     Kind::Number => {
-                        return self.parse_expr(&SyntaxElement::Node(cur_node));
+                        return self.parse_expr(&cur_node);
                     }
                     _ => (),
                 }
             } else {
                 // other possibility of Expr
+                let first = Self::get_first_token_skip_ws_cmt(&node).unwrap();
+                match node.kind() {
+                    Kind::PrimaryExp => {}
+                    Kind::UnaryExp => {
+                        return self.parse_unary_exp(&node)
+                    }
+                    /// binary op
+                    Kind::MulExp | Kind::AddExp => {}
+                    // compare exp, can chain together for compare
+                    Kind::RelationExp | Kind::EqExp => {}
+                    /// Bool exp, chain together with same BoolOp, for short circuit
+                    Kind::LogicAndExp | Kind::LogicOrExp => {}
+                    Kind::LeftValue => {
+                        // more than one child elems means subscript
+                    }
+                    _ => (),
+                }
                 todo!()
             }
-        } else {
-            panic!("Expect a node");
         }
+        //panic!("Expect a node");
+
         unreachable!()
     }
 

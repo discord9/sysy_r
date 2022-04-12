@@ -176,7 +176,7 @@ mod test {
             let src = text.get(tok.0.byte_idx..tok.2.byte_idx).unwrap();
             println!("{:?}@{}..{} \"{}\"", tok.1, tok.0.byte_idx, tok.2.byte_idx, src);
         }
-        let token_only: Vec<Kind> = res.into_iter().map(|tok|{
+        let _token_only: Vec<Kind> = res.into_iter().map(|tok|{
             tok.1
         }).collect();
         /* 
