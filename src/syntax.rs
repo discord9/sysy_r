@@ -47,13 +47,14 @@ pub enum SyntaxKind {
     // literal const
     IntConst,
     FloatConst,
-    Number,
+   
     // whitespace and comment
     Comment, // one line or multiline
     Whitespace,
     Error,
 
     // composite nodes
+    Number,
     CompUnit,
     Decl,
     ConstDecl,

@@ -16,7 +16,7 @@ pub enum RegPat{
 
 impl RegPat{
     pub fn pat(pats: &[Kind])-> Self{
-        Self::Pattern(Vec::from(pats))
+        Self::Pat(Vec::from(pats))
     }
     pub fn rep(pat: Vec<Self>, op: MetaCh) -> Self {
         Self::Rep { pat: pat, op }

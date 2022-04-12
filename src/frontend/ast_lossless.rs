@@ -3,24 +3,30 @@
 //! Refactory AST to
 //! ```
 //! pub struct $node {
-//!     pub id: usize,
+//!     pub id: NodeId,
 //!     pub kind: $node Kind,
 //!     pub elem: CSTElement,
 //! }
 //! ```
 //! layer AST on top of `SyntaxNode` API.
 #![allow(unused)]
+use std::ptr::NonNull;
+
+// TODO: Remove after completed
 use crate::cst::{parse, SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
+use rowan::{TextLen, TextRange};
 use serde::{Deserialize, Serialize};
 
 /// a wrapper for syntax element
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Span(
-    usize,
-    usize, //SyntaxElement
-           // TODO ser for SyntaxElement
-);
+pub struct Span(usize, usize);
+
+impl From<TextRange> for Span {
+    fn from(tr: TextRange) -> Self {
+        Self(tr.start().into(), tr.end().into())
+    }
+}
 
 // TODO: impl serialize manually for ASTNode
 macro_rules! decl_ast_node {
@@ -73,7 +79,7 @@ decl_ast_node!((FuncDef, FuncDefKind));
 pub struct DefKind {
     is_const: bool, // if not const InitVal can be optional
     ident: String,
-    shape: Option<Vec<Expr>>,   // const
+    shape: Option<Vec<Expr>>,  // const
     init_val: Option<InitVal>, //const_init_val:
 }
 
@@ -199,3 +205,104 @@ pub enum IntOrFloatKind {
 }
 
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
+
+type NodeId = usize;
+/// Convert CST to AST
+pub struct AST {
+    first_unalloc_node_id: NodeId,
+}
+impl AST {
+    fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
+        match elem {
+            SyntaxElement::Node(node) => {
+                for kind in kinds {
+                    if *kind != node.kind() {
+                        return None;
+                    }
+                }
+                Some(node)
+            }
+            SyntaxElement::Token(token) => None,
+        }
+    }
+
+    fn get_syntax_token<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxToken> {
+        match elem {
+            SyntaxElement::Node(node) => None,
+            SyntaxElement::Token(token) => {
+                for kind in kinds {
+                    if *kind != token.kind() {
+                        return None;
+                    }
+                }
+                Some(token)
+            }
+        }
+    }
+    /// alloc a node id, return a unique node id
+    fn alloc_node_id(&mut self) -> NodeId {
+        let ret = self.first_unalloc_node_id;
+        self.first_unalloc_node_id += 1;
+        ret
+    }
+    /// get all child elem(Node and token) using flag to selectivelty filter out node or token or ws&cmt
+    fn get_child_elem(
+        elem: &SyntaxNode,
+        skip_ws_cmt: bool,
+        take_token: bool,
+        take_node: bool,
+    ) -> Vec<SyntaxElement> {
+        elem.children_with_tokens()
+            .map(|child| match child {
+                SyntaxElement::Token(ref token) => {
+                    if skip_ws_cmt && matches!(token.kind(), Kind::Whitespace | Kind::Comment) {
+                        None
+                    } else if take_token {
+                        Some(child)
+                    } else {
+                        None
+                    }
+                }
+                SyntaxElement::Node(ref node) => {
+                    if take_node {
+                        Some(child)
+                    } else {
+                        None
+                    }
+                }
+            })
+            .filter(|x| x.is_some())
+            .map(|x| x.unwrap())
+            .collect()
+    }
+    /// get first token 
+    /// 
+    /// NOTE: skip white space and comment
+    fn get_first_skipped_token(node: &SyntaxNode) -> Option<SyntaxToken> {
+        Self::get_child_elem(node, true, true, false)
+            .get(0)
+            .unwrap()
+            .as_token()
+            .cloned()
+    }
+    /// Accept a Number compsite node
+    pub fn parse_number(&mut self, elem: &SyntaxElement) -> IntOrFloat {
+        if let Some(node) = elem.as_node() {
+            if !matches!(node.kind(), Kind::Number) {
+                panic!("Expect a number node");
+            }
+            let tok = Self::get_first_skipped_token(node).expect("Expect a number");
+            let reskind = match tok.kind() {
+                Kind::IntConst => IntOrFloatKind::Int(tok.text().parse::<i32>().unwrap()),
+                Kind::FloatConst => IntOrFloatKind::Float(tok.text().parse::<f32>().unwrap()),
+                _ => panic!("Expect a float or int"),
+            };
+            return IntOrFloat {
+                id: self.alloc_node_id(),
+                kind: reskind,
+                elem: tok.text_range().into(),
+            };
+        }
+        panic!("Expect a Number CST Node.")
+    }
+}
