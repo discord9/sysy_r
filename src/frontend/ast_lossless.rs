@@ -412,11 +412,40 @@ impl AST {
         Expr {
             id: self.alloc_node_id(),
             kind: reskind,
-            span: node.text_range().into()
+            span: node.text_range().into(),
         }
     }
 
-    // TODO: compare and subscript
+    /// a[1][2][3] to sub(sub(sub(a,1),2),3)
+    pub fn parse_subscript_exp(&mut self, node: &SyntaxNode) -> Expr {
+        assert_eq!(node.kind(), Kind::LeftValue);
+
+        let ident = Self::get_first_token_skip_ws_cmt(node).unwrap();
+        let mut it = node.children();
+        let mut sub_exp = Expr {
+            id: self.alloc_node_id(),
+            kind: ExprKind::Name(ident.text().to_string()),
+            span: ident.text_range().into(),
+        };
+        let (mut start_loc, mut end_loc): (usize, usize) = (
+            ident.text_range().start().into(),
+            ident.text_range().end().into(),
+        );
+        while let Some(exp_cst) = it.next() {
+            end_loc = exp_cst.text_range().end().into();
+            let slice = self.parse_expr(&exp_cst);
+            let reskind = ExprKind::Subscript {
+                value: Box::new(sub_exp),
+                slice: Box::new(slice),
+            };
+            sub_exp = Expr {
+                id: self.alloc_node_id(),
+                kind: reskind,
+                span: Span(start_loc, end_loc)
+            };
+        }
+        sub_exp
+    }
 
     /// go over the single child tree until find a node that is:
     ///
