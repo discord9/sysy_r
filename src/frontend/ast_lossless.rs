@@ -61,7 +61,7 @@ decl_ast_node!((DeclOrFuncDef, DeclOrFuncDefKind));
 pub struct DeclKind {
     is_const: bool,
     btype: BasicType,
-    def: Vec<Def>,
+    defs: Vec<Def>,
 }
 decl_ast_node!((Decl, DeclKind));
 #[derive(Serialize, Deserialize, Debug)]
@@ -288,15 +288,63 @@ impl AST {
             .cloned()
     }
 
-    pub fn parse_decl(&mut self, node: &SyntaxNode) -> Decl {
+    pub fn parse_def(&mut self, node: &SyntaxNode) -> Def {
         todo!()
+    }
+    pub fn parse_btype_token(&mut self, token: &SyntaxToken) -> BasicType {
+        assert_eq!(token.kind(), Kind::BType);
+        let reskind = match token.text() {
+            "void" => BasicTypeKind::Void,
+            "int" => BasicTypeKind::Int,
+            "float" => BasicTypeKind::Float,
+            _ => unreachable!(),
+        };
+        BasicType {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: token.text_range().into(),
+        }
+    }
+    pub fn parse_decl(&mut self, node: &SyntaxNode) -> Decl {
+        let childs = Self::get_child_elem(node, true, true, false);
+        let mut it_token = childs.iter();
+        let mut cur_token = it_token.next().unwrap().as_token().unwrap();
+        let is_const = cur_token.kind() == Kind::ConstKeyword;
+        let btype = {
+            let btype_cst = {
+                if is_const {
+                    it_token.next().unwrap().as_token().unwrap()
+                } else {
+                    cur_token
+                }
+            };
+            self.parse_btype_token(btype_cst)
+        };
+        let it = node.children();
+        let mut defs: Vec<Def> = Vec::new();
+        for def_cst in it {
+            defs.push(self.parse_def(&def_cst));
+        }
+        let reskind = DeclKind {
+            is_const,
+            btype,
+            defs,
+        };
+        Decl {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: node.text_range().into(),
+        }
     }
 
     /// Vec<DeclOrStatement>
     pub fn parse_block(&mut self, node: &SyntaxNode) -> Block {
-        let block_items: Vec<_> = Self::get_child_elem(node, true, false, true).iter().map(|x|x.as_node().unwrap().clone()).collect();
+        let block_items: Vec<_> = Self::get_child_elem(node, true, false, true)
+            .iter()
+            .map(|x| x.as_node().unwrap().clone())
+            .collect();
         let mut lines: Vec<DeclOrStatement> = Vec::new();
-        for block_item in block_items{
+        for block_item in block_items {
             let child_node = block_item.first_child().unwrap();
             match child_node.kind() {
                 Kind::Decl => {
@@ -304,7 +352,7 @@ impl AST {
                     let line = DeclOrStatement {
                         id: self.alloc_node_id(),
                         kind: DeclOrStatementKind::Decl(decl),
-                        span: child_node.text_range().into()
+                        span: child_node.text_range().into(),
                     };
                     lines.push(line);
                 }
@@ -313,18 +361,22 @@ impl AST {
                     let line = DeclOrStatement {
                         id: self.alloc_node_id(),
                         kind: DeclOrStatementKind::Statement(stmt),
-                        span: child_node.text_range().into()
+                        span: child_node.text_range().into(),
                     };
                     lines.push(line);
                 }
-                _ => ()
+                _ => (),
             }
         }
-        let reskind = BlockKind{items: lines};
-        return Block { id: self.alloc_node_id(), kind: reskind, span: node.text_range().into() }
+        let reskind = BlockKind { items: lines };
+        return Block {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: node.text_range().into(),
+        };
     }
 
-    /// TODO: parse_block
+    /// all of the if while etc.
     pub fn parse_stmt(&mut self, node: &SyntaxNode) -> Statement {
         assert_eq!(node.kind(), Kind::Statement);
         let first = Self::get_first_token_skip_ws_cmt(node).unwrap();
@@ -349,8 +401,8 @@ impl AST {
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: StatementKind::Block(block),
-                    span: node.text_range().into()
-                }
+                    span: node.text_range().into(),
+                };
             }
             Kind::IfKeyword => {
                 let cond = self.parse_expr(&it.next().unwrap());
@@ -362,48 +414,57 @@ impl AST {
                         None
                     }
                 };
-                let reskind = StatementKind::IfStmt { cond: cond, stmt: Box::new(stmt), else_stmt: Box::new(else_stmt) };
+                let reskind = StatementKind::IfStmt {
+                    cond: cond,
+                    stmt: Box::new(stmt),
+                    else_stmt: Box::new(else_stmt),
+                };
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: reskind,
-                    span: node.text_range().into()
-                }
+                    span: node.text_range().into(),
+                };
             }
             Kind::WhileKeyword => {
                 let cond = self.parse_expr(&it.next().unwrap());
                 let stmt = self.parse_stmt(&it.next().unwrap());
-                let reskind = StatementKind::WhileStmt { cond, stmt: Box::new(stmt) };
+                let reskind = StatementKind::WhileStmt {
+                    cond,
+                    stmt: Box::new(stmt),
+                };
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: reskind,
-                    span: node.text_range().into()
-                }
+                    span: node.text_range().into(),
+                };
             }
             Kind::BreakKeyword => {
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: StatementKind::BreakStmt,
-                    span: node.text_range().into()
+                    span: node.text_range().into(),
                 }
             }
             Kind::ContinueKeyword => {
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: StatementKind::ContinueStmt,
-                    span: node.text_range().into()
+                    span: node.text_range().into(),
                 }
             }
             Kind::ReturnKeyword => {
                 let exp_opt = {
-                    if let Some(exp_cst) = it.next(){
+                    if let Some(exp_cst) = it.next() {
                         Some(self.parse_expr(&exp_cst))
-                    }else{None}
+                    } else {
+                        None
+                    }
                 };
                 return Statement {
                     id: self.alloc_node_id(),
                     kind: StatementKind::ReturnStmt(exp_opt),
-                    span: node.text_range().into()
-                }
+                    span: node.text_range().into(),
+                };
             }
             _ => panic!("Expect statement CST node"),
         }
