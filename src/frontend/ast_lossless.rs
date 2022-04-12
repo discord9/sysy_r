@@ -322,13 +322,41 @@ impl AST {
                     id: self.alloc_node_id(),
                     kind: reskind,
                     span: node.text_range().into(),
-                }
-            }else{
+                };
+            } else {
                 unreachable!()
             }
         };
         unreachable!()
     }
+
+    /// PrimaryExp → '(' Exp ')'
+    pub fn parse_primary_exp(&mut self, node: &SyntaxNode) -> Expr {
+        return self.parse_expr(&node.first_child().unwrap());
+    }
+
+    /// parse bool exp
+    ///
+    /// exp op exp op exp ....
+    ///
+    /// op -> `&&` | `||`
+    pub fn parse_bool_exp(&mut self, node: &SyntaxNode) -> Expr {
+        let op = node.first_token().unwrap();
+        let mut args = Vec::new();
+        for exp_cst in node.children() {
+            args.push(self.parse_expr(&exp_cst));
+        }
+        let reskind = ExprKind::BoolOp {
+            op: op.kind(),
+            args,
+        };
+        Expr {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: node.text_range().into()
+        }
+    }
+
     /// go over the single child tree until find a node that is:
     ///
     /// 1. have more than one childs
@@ -372,9 +400,7 @@ impl AST {
                 let first = Self::get_first_token_skip_ws_cmt(&node).unwrap();
                 match node.kind() {
                     Kind::PrimaryExp => {}
-                    Kind::UnaryExp => {
-                        return self.parse_unary_exp(&node)
-                    }
+                    Kind::UnaryExp => return self.parse_unary_exp(&node),
                     /// binary op
                     Kind::MulExp | Kind::AddExp => {}
                     // compare exp, can chain together for compare
