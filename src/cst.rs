@@ -647,7 +647,8 @@ pub fn parse(text: &str) -> Parse {
         .collect();
     Parser::new(tokens).parse()
 }
-
+#[cfg(test)]
+pub use tests::output_cst;
 #[cfg(test)]
 mod tests {
     use std::{fs::File, path::Path};
@@ -729,7 +730,7 @@ mod tests {
     /// output cst into a string.
     ///
     /// `tab` is spacing for child node
-    fn output_cst(node: &SyntaxNode, depth: usize, text: &str, output: &mut String, tab: &str) {
+    pub fn output_cst(node: &SyntaxNode, depth: usize, text: &str, output: &mut String, tab: &str) {
         //let tab = "    ";
         let child_spaces: String = (0..depth + 1).map(|_| tab).collect();
         let spaces: String = (0..depth).map(|_| tab).collect();

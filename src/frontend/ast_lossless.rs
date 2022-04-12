@@ -50,6 +50,7 @@ pub struct CompUnitKind {
 }
 decl_ast_node!((CompUnit, CompUnitKind));
 
+/// because only comp_unit store a list or decl or funcdef, so this enum doesn't need to have a node id.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DeclOrFuncDef {
     Decl(Decl),
@@ -119,6 +120,7 @@ pub struct BlockKind {
 }
 decl_ast_node!((Block, BlockKind));
 
+/// because block store a list or decl or statement, so this enum doesn't need to have a node id.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DeclOrStatement {
     Decl(Decl),
@@ -212,6 +214,11 @@ pub struct AST {
     first_unalloc_node_id: NodeId,
 }
 impl AST {
+    pub fn new() -> Self {
+        Self {
+            first_unalloc_node_id: 0,
+        }
+    }
     fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
         if let Some(node) = elem.as_node() {
             for kind in kinds {
@@ -278,8 +285,11 @@ impl AST {
     }
 
     /// get child tokens
-    fn get_child_token(node: &SyntaxNode,skip_ws_cmt: bool,)-> Vec<SyntaxToken> {
-        Self::get_child_elem(node, skip_ws_cmt, true, false).iter().map(|x|x.as_token().unwrap().clone()).collect()
+    fn get_child_token(node: &SyntaxNode, skip_ws_cmt: bool) -> Vec<SyntaxToken> {
+        Self::get_child_elem(node, skip_ws_cmt, true, false)
+            .iter()
+            .map(|x| x.as_token().unwrap().clone())
+            .collect()
     }
 
     /// get first token
@@ -296,8 +306,8 @@ impl AST {
     /// constDecl Decl FuncDef
     pub fn parse_comp_unit(&mut self, node: &SyntaxNode) -> CompUnit {
         let mut items = Vec::new();
-        for item in node.children(){
-            match item.kind(){
+        for item in node.children() {
+            match item.kind() {
                 Kind::Decl | Kind::ConstDecl => {
                     let res = self.parse_decl(&item);
                     items.push(DeclOrFuncDef::Decl(res));
@@ -306,46 +316,51 @@ impl AST {
                     let res = self.parse_func_def(&item);
                     items.push(DeclOrFuncDef::FuncDef(res));
                 }
-                _ => ()
+                _ => (),
             }
         }
-        let kind = CompUnitKind{items};
-        return CompUnit{
+        let kind = CompUnitKind { items };
+        return CompUnit {
             id: self.alloc_node_id(),
             kind,
-            span: node.text_range().into()
-        }
+            span: node.text_range().into(),
+        };
     }
 
     pub fn parse_formal_params(&mut self, node: &SyntaxNode) -> Vec<FuncFParam> {
+        assert_eq!(node.kind(), Kind::FuncFParams);
         let mut fps = Vec::new();
-        for fp in node.children(){
-            let tokens = Self::get_child_token(&fp, true);
+        for formal_param in node.children() {
+            assert_eq!(formal_param.kind(), Kind::FuncFParam);
+            let tokens = Self::get_child_token(&formal_param, true);
             let btype = self.parse_btype_token(&tokens[0]);
             let ident = tokens[1].text().to_string();
             let array_shape = {
                 if let Some(tok) = tokens.get(2) {
                     if tok.kind() == Kind::LBracket {
                         let mut array_shape = Vec::new();
-                        for exp in node.children(){
+                        //assert_eq!(formal_param.children().count(),0);
+                        for exp in formal_param.children() {
                             array_shape.push(self.parse_expr(&exp));
                         }
                         Some(array_shape)
-                    }else{
+                    } else {
                         unreachable!()
                     }
-                }else{
+                } else {
                     None
                 }
             };
-            
-            let kind = FuncFParamKind{
-                btype,ident, array_shape
+
+            let kind = FuncFParamKind {
+                btype,
+                ident,
+                array_shape,
             };
-            let res = FuncFParam{
+            let res = FuncFParam {
                 id: self.alloc_node_id(),
                 kind,
-                span: fp.text_range().into()
+                span: formal_param.text_range().into(),
             };
             fps.push(res);
         }
@@ -362,7 +377,7 @@ impl AST {
         let ident = child_tokens.get(1).unwrap().text().to_string();
         let mut formal_params = None;
         let mut block = None;
-        for child_node in node.children(){
+        for child_node in node.children() {
             match child_node.kind() {
                 Kind::FuncFParams => {
                     formal_params = Some(self.parse_formal_params(&child_node));
@@ -371,20 +386,20 @@ impl AST {
                     block = Some(self.parse_block(&child_node));
                     break;
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
-        let kind = FuncDefKind{
+        let kind = FuncDefKind {
             func_type,
             ident,
             formal_params: formal_params.unwrap(),
-            block: block.unwrap()
+            block: block.unwrap(),
         };
-        return FuncDef{
+        return FuncDef {
             id: self.alloc_node_id(),
             kind,
-            span: node.text_range().into()
-        }
+            span: node.text_range().into(),
+        };
     }
 
     /// ConstInitVal or InitVal
@@ -863,4 +878,29 @@ impl AST {
         }
         panic!("Expect a Number CST Node.")
     }
+}
+
+#[test]
+fn test_integrate_manual() {
+    use crate::cst::{output_cst, parse};
+    let text = "
+        int main(int argv,int args[]){
+        }";
+    let parse = parse(text);
+    let node = parse.syntax();
+    let mut cst_print = String::new();
+    output_cst(&node, 0, text, &mut cst_print, "│");
+    print!("CST:\n{}\n", cst_print);
+    let mut ast = AST::new();
+    let cu = ast.parse_comp_unit(&node);
+
+    use ron::ser::{to_string_pretty, PrettyConfig};
+    let pretty = PrettyConfig::new()
+        .separate_tuple_members(false)
+        //.indentor("  ".to_string())
+        .enumerate_arrays(true);
+    println!(
+        "AST:\n{}",
+        to_string_pretty(&cu, pretty.to_owned()).unwrap()
+    );
 }
