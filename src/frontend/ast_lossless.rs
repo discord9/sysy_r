@@ -369,7 +369,7 @@ impl AST {
         let first = it.next().unwrap().as_node().unwrap();
         end_loc = first.text_range().end().into();
         let mut left = self.parse_expr(first);
-        
+
         while let Some(next) = it.next() {
             let op = next.as_token().unwrap().kind();
             let next = it.next().unwrap().as_node().unwrap();
@@ -383,11 +383,40 @@ impl AST {
             left = Expr {
                 id: self.alloc_node_id(),
                 kind: reskind,
-                span: Span(start_loc, end_loc)
+                span: Span(start_loc, end_loc),
             };
         }
         left
     }
+
+    /// parse 1<2<3 to {op:[`<`,`<`],left:1, comparators:[2,3]}
+    pub fn parse_compare_exp(&mut self, node: &SyntaxNode) -> Expr {
+        let childs = Self::get_child_elem(node, true, true, true);
+        let mut it = childs.iter();
+        let first = it.next().unwrap().as_node().unwrap();
+        let mut left = self.parse_expr(first);
+        let mut ops = Vec::new();
+        let mut comparators = Vec::new();
+        while let Some(next) = it.next() {
+            let op = next.as_token().unwrap().kind();
+            ops.push(op);
+            let next = it.next().unwrap().as_node().unwrap();
+            let right = self.parse_expr(next);
+            comparators.push(right);
+        }
+        let reskind = ExprKind::CmpOp {
+            op: ops,
+            left: Box::new(left),
+            comparators,
+        };
+        Expr {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: node.text_range().into()
+        }
+    }
+
+    // TODO: compare and subscript
 
     /// go over the single child tree until find a node that is:
     ///
@@ -434,7 +463,7 @@ impl AST {
                     Kind::PrimaryExp => {}
                     Kind::UnaryExp => return self.parse_unary_exp(&node),
                     /// binary op
-                    Kind::MulExp | Kind::AddExp => {}
+                    Kind::MulExp | Kind::AddExp => return self.parse_binary_exp(&node),
                     // compare exp, can chain together for compare
                     Kind::RelationExp | Kind::EqExp => {}
                     /// Bool exp, chain together with same BoolOp, for short circuit
