@@ -79,7 +79,7 @@ decl_ast_node!((FuncDef, FuncDefKind));
 pub struct DefKind {
     is_const: bool, // if not const InitVal can be optional
     ident: String,
-    shape: Option<Vec<Expr>>,  // const
+    shape: Vec<Expr>,          // const when is_empty then a normal var
     init_val: Option<InitVal>, //const_init_val:
 }
 
@@ -288,9 +288,44 @@ impl AST {
             .cloned()
     }
 
-    pub fn parse_def(&mut self, node: &SyntaxNode) -> Def {
+    /// ConstInitVal or InitVal
+    pub fn parse_init_val(&mut self, node: &SyntaxNode, is_const: bool) -> InitVal {
         todo!()
     }
+
+    /// Ident { '[' ConstExp ']' } '=' ConstInitVal
+    pub fn parse_def(&mut self, node: &SyntaxNode, is_const: bool) -> Def {
+        let ident = Self::get_first_token_skip_ws_cmt(node).unwrap();
+        assert_eq!(ident.kind(), Kind::Ident);
+        let exps_cst: Vec<_> = Self::get_child_elem(node, true, false, true)
+            .iter()
+            .map(|x| x.as_node().unwrap().clone())
+            .collect();
+        let mut shape = Vec::new();
+        let mut init_val: Option<InitVal> = None;
+        for exp_or_init_val in exps_cst {
+            match exp_or_init_val.kind() {
+                Kind::ConstExp => shape.push(self.parse_expr(&exp_or_init_val)),
+                Kind::ConstInitVal | Kind::InitVal => {
+                    init_val = Some(self.parse_init_val(node, is_const))
+                }
+                _ => unreachable!(),
+            }
+        }
+        let kind = DefKind {
+            is_const,
+            ident: ident.text().to_string(),
+            shape,
+            init_val,
+        };
+        Def {
+            id: self.alloc_node_id(),
+            kind,
+            span: node.text_range().into(),
+        }
+    }
+
+    /// parse TOKEN BTYPE
     pub fn parse_btype_token(&mut self, token: &SyntaxToken) -> BasicType {
         assert_eq!(token.kind(), Kind::BType);
         let reskind = match token.text() {
@@ -305,6 +340,8 @@ impl AST {
             span: token.text_range().into(),
         }
     }
+
+    /// ConstDecl or VarDecl
     pub fn parse_decl(&mut self, node: &SyntaxNode) -> Decl {
         let childs = Self::get_child_elem(node, true, true, false);
         let mut it_token = childs.iter();
@@ -323,7 +360,7 @@ impl AST {
         let it = node.children();
         let mut defs: Vec<Def> = Vec::new();
         for def_cst in it {
-            defs.push(self.parse_def(&def_cst));
+            defs.push(self.parse_def(&def_cst, is_const));
         }
         let reskind = DeclKind {
             is_const,
