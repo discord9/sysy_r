@@ -288,7 +288,9 @@ impl AST {
             .cloned()
     }
 
-    /// UnaryExp -> UnaryOp UnaryExp | Ident `(` FuncRParams `)`
+    /// UnaryExp -> UnaryOp UnaryExp
+    ///
+    /// | Ident `(` FuncRParams `)`
     pub fn parse_unary_exp(&mut self, node: &SyntaxNode) -> Expr {
         let first = Self::get_first_token_skip_ws_cmt(&node);
         if let Some(token) = first {
@@ -441,7 +443,7 @@ impl AST {
             sub_exp = Expr {
                 id: self.alloc_node_id(),
                 kind: reskind,
-                span: Span(start_loc, end_loc)
+                span: Span(start_loc, end_loc),
             };
         }
         sub_exp
@@ -487,20 +489,19 @@ impl AST {
                 }
             } else {
                 // other possibility of Expr
-                let first = Self::get_first_token_skip_ws_cmt(&node).unwrap();
+                //let first = Self::get_first_token_skip_ws_cmt(&node).unwrap();
                 match node.kind() {
-                    Kind::PrimaryExp => {}
+                    Kind::PrimaryExp => return self.parse_primary_exp(&node),
                     Kind::UnaryExp => return self.parse_unary_exp(&node),
                     /// binary op
                     Kind::MulExp | Kind::AddExp => return self.parse_binary_exp(&node),
                     // compare exp, can chain together for compare
-                    Kind::RelationExp | Kind::EqExp => {}
+                    Kind::RelationExp | Kind::EqExp => return self.parse_compare_exp(&node),
                     /// Bool exp, chain together with same BoolOp, for short circuit
-                    Kind::LogicAndExp | Kind::LogicOrExp => {}
-                    Kind::LeftValue => {
-                        // more than one child elems means subscript
-                    }
-                    _ => (),
+                    Kind::LogicAndExp | Kind::LogicOrExp => return self.parse_bool_exp(&node),
+                    // more than one child elems means subscript
+                    Kind::LeftValue => return self.parse_subscript_exp(&node),
+                    _ => panic!("Expect one type of *Exp CST Node"),
                 }
                 todo!()
             }
