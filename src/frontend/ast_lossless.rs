@@ -277,6 +277,11 @@ impl AST {
             .collect()
     }
 
+    /// get child tokens
+    fn get_child_token(node: &SyntaxNode,skip_ws_cmt: bool,)-> Vec<SyntaxToken> {
+        Self::get_child_elem(node, skip_ws_cmt, true, false).iter().map(|x|x.as_token().unwrap().clone()).collect()
+    }
+
     /// get first token
     ///
     /// NOTE: skip white space and comment
@@ -289,7 +294,38 @@ impl AST {
     }
 
     pub fn parse_formal_params(&mut self, node: &SyntaxNode) -> Vec<FuncFParam> {
-        todo!()
+        let mut fps = Vec::new();
+        for fp in node.children(){
+            let tokens = Self::get_child_token(&fp, true);
+            let btype = self.parse_btype_token(&tokens[0]);
+            let ident = tokens[1].text().to_string();
+            let array_shape = {
+                if let Some(tok) = tokens.get(2) {
+                    if tok.kind() == Kind::LBracket {
+                        let mut array_shape = Vec::new();
+                        for exp in node.children(){
+                            array_shape.push(self.parse_expr(&exp));
+                        }
+                        Some(array_shape)
+                    }else{
+                        unreachable!()
+                    }
+                }else{
+                    None
+                }
+            };
+            
+            let kind = FuncFParamKind{
+                btype,ident, array_shape
+            };
+            let res = FuncFParam{
+                id: self.alloc_node_id(),
+                kind,
+                span: fp.text_range().into()
+            };
+            fps.push(res);
+        }
+        fps
     }
 
     /// parse func def
@@ -784,7 +820,7 @@ impl AST {
                     Kind::LeftValue => return self.parse_subscript_exp(&node),
                     _ => panic!("Expect one type of *Exp CST Node"),
                 }
-                todo!()
+                //todo!()
             }
         }
         //panic!("Expect a node");
