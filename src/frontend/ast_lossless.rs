@@ -36,7 +36,7 @@ macro_rules! decl_ast_node {
         pub struct $ast {
             pub id: usize,
             pub kind: $astkind,
-            pub elem: Span
+            pub span: Span
         }
     )*
     }
@@ -213,16 +213,15 @@ pub struct AST {
 }
 impl AST {
     fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
-        match elem {
-            SyntaxElement::Node(node) => {
-                for kind in kinds {
-                    if *kind != node.kind() {
-                        return None;
-                    }
+        if let Some(node) = elem.as_node() {
+            for kind in kinds {
+                if *kind != node.kind() {
+                    return None;
                 }
-                Some(node)
             }
-            SyntaxElement::Token(token) => None,
+            return Some(node);
+        } else {
+            return None;
         }
     }
 
@@ -239,12 +238,14 @@ impl AST {
             }
         }
     }
+
     /// alloc a node id, return a unique node id
     fn alloc_node_id(&mut self) -> NodeId {
         let ret = self.first_unalloc_node_id;
         self.first_unalloc_node_id += 1;
         ret
     }
+
     /// get all child elem(Node and token) using flag to selectivelty filter out node or token or ws&cmt
     fn get_child_elem(
         elem: &SyntaxNode,
@@ -275,23 +276,78 @@ impl AST {
             .map(|x| x.unwrap())
             .collect()
     }
-    /// get first token 
-    /// 
+
+    /// get first token
+    ///
     /// NOTE: skip white space and comment
-    fn get_first_skipped_token(node: &SyntaxNode) -> Option<SyntaxToken> {
+    fn get_first_token_skip_ws_cmt(node: &SyntaxNode) -> Option<SyntaxToken> {
         Self::get_child_elem(node, true, true, false)
             .get(0)
             .unwrap()
             .as_token()
             .cloned()
     }
+
+    /// go over the single child tree until find a node that is:
+    ///
+    /// 1. have more than one childs
+    ///
+    /// or
+    /// 2. have only one child but the child is a token
+    pub fn parse_expr(&mut self, elem: &SyntaxElement) -> Expr {
+        if let Some(node) = elem.as_node().to_owned() {
+            let mut node = node;
+            let mut childs = Self::get_child_elem(node, true, true, true);
+            {
+                while node.children_with_tokens().count() == 1{
+                    if let Some(child_node) = node.first_child(){
+                        node = child_node;
+                    }
+                }
+            }
+            while childs.len() == 1 {
+                if let Some(new_node) = childs.get(0).unwrap().as_node() {
+                    node = new_node;
+                    childs = Self::get_child_elem(node, true, true, true);
+                } else {
+                    break;
+                }
+            }
+
+            if Self::get_child_elem(node, true, true, true).len() == 1 {
+                // only two possible: 1. a LVAL(ident) 2. a number
+                let cur_node = node.to_owned();
+                match cur_node.kind() {
+                    Kind::LeftValue => {
+                        let ident = Self::get_first_token_skip_ws_cmt(&cur_node).unwrap();
+                        let reskind = ExprKind::Name(ident.text().to_string());
+                        return Expr {
+                            id: self.alloc_node_id(),
+                            kind: reskind,
+                            span: ident.text_range().into()
+                        }
+                    }
+                    Kind::Number => {
+                        return self.parse_expr(&SyntaxElement::Node(cur_node));
+                    }
+                    _ => ()
+                }
+            } else {
+                // other possibility of Expr
+            }
+        } else {
+            panic!("Expect a node");
+        }
+        unreachable!()
+    }
+
     /// Accept a Number compsite node
     pub fn parse_number(&mut self, elem: &SyntaxElement) -> IntOrFloat {
         if let Some(node) = elem.as_node() {
             if !matches!(node.kind(), Kind::Number) {
                 panic!("Expect a number node");
             }
-            let tok = Self::get_first_skipped_token(node).expect("Expect a number");
+            let tok = Self::get_first_token_skip_ws_cmt(node).expect("Expect a number");
             let reskind = match tok.kind() {
                 Kind::IntConst => IntOrFloatKind::Int(tok.text().parse::<i32>().unwrap()),
                 Kind::FloatConst => IntOrFloatKind::Float(tok.text().parse::<f32>().unwrap()),
@@ -300,7 +356,7 @@ impl AST {
             return IntOrFloat {
                 id: self.alloc_node_id(),
                 kind: reskind,
-                elem: tok.text_range().into(),
+                span: tok.text_range().into(),
             };
         }
         panic!("Expect a Number CST Node.")
