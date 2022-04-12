@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn test_integrate(){
-        let _text = "
+        let text = "
         int main(int argv,int args[]){
             if(ARMv8==1)print(HELLO_WORLD);
             while(1){
@@ -837,7 +837,7 @@ mod tests {
             }
             if(1+2*3%4/5==6)return 0;
         }";
-        let text = "
+        let _text = "
         //const int ARMv8 = 1;
         const int array[2][3] = {{0,1},2,3};
         const int HELLO_WORLD[12] = {

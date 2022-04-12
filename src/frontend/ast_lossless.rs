@@ -288,6 +288,45 @@ impl AST {
             .cloned()
     }
 
+    pub fn parse_formal_params(&mut self, node: &SyntaxNode) -> Vec<FuncFParam> {
+        todo!()
+    }
+
+    /// parse func def
+    pub fn parse_func_def(&mut self, node: &SyntaxNode) -> FuncDef {
+        let child_tokens: Vec<_> = Self::get_child_elem(node, true, true, false)
+            .into_iter()
+            .map(|x| x.as_token().unwrap().clone())
+            .collect();
+        let func_type = self.parse_btype_token(child_tokens.get(0).unwrap());
+        let ident = child_tokens.get(1).unwrap().text().to_string();
+        let mut formal_params = None;
+        let mut block = None;
+        for child_node in node.children(){
+            match child_node.kind() {
+                Kind::FuncFParams => {
+                    formal_params = Some(self.parse_formal_params(&child_node));
+                }
+                Kind::Block => {
+                    block = Some(self.parse_block(&child_node));
+                    break;
+                }
+                _ => unreachable!()
+            }
+        }
+        let kind = FuncDefKind{
+            func_type,
+            ident,
+            formal_params: formal_params.unwrap(),
+            block: block.unwrap()
+        };
+        return FuncDef{
+            id: self.alloc_node_id(),
+            kind,
+            span: node.text_range().into()
+        }
+    }
+
     /// ConstInitVal or InitVal
     pub fn parse_init_val(&mut self, node: &SyntaxNode) -> InitVal {
         let item = node.first_child().unwrap();
@@ -304,17 +343,17 @@ impl AST {
             Kind::InitVal | Kind::ConstInitVal => {
                 let mut it = node.children();
                 let mut arr = Vec::new();
-                for elem in it{
+                for elem in it {
                     arr.push(self.parse_init_val(&elem));
                 }
                 let kind = ExpOrInitValKind::InitVals(arr);
-                return InitVal{
+                return InitVal {
                     id: self.alloc_node_id(),
                     kind,
-                    span: node.text_range().into()
-                }
+                    span: node.text_range().into(),
+                };
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
