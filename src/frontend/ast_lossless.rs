@@ -51,11 +51,11 @@ pub struct CompUnitKind {
 decl_ast_node!((CompUnit, CompUnitKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum DeclOrFuncDefKind {
+pub enum DeclOrFuncDef {
     Decl(Decl),
     FuncDef(FuncDef),
 }
-decl_ast_node!((DeclOrFuncDef, DeclOrFuncDefKind));
+//decl_ast_node!((DeclOrFuncDef, DeclOrFuncDefKind));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeclKind {
@@ -120,11 +120,11 @@ pub struct BlockKind {
 decl_ast_node!((Block, BlockKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum DeclOrStatementKind {
+pub enum DeclOrStatement {
     Decl(Decl),
     Statement(Statement),
 }
-decl_ast_node!((DeclOrStatement, DeclOrStatementKind));
+//decl_ast_node!((DeclOrStatement, DeclOrStatementKind));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum StatementKind {
@@ -291,6 +291,30 @@ impl AST {
             .unwrap()
             .as_token()
             .cloned()
+    }
+
+    /// constDecl Decl FuncDef
+    pub fn parse_comp_unit(&mut self, node: &SyntaxNode) -> CompUnit {
+        let mut items = Vec::new();
+        for item in node.children(){
+            match item.kind(){
+                Kind::Decl | Kind::ConstDecl => {
+                    let res = self.parse_decl(&item);
+                    items.push(DeclOrFuncDef::Decl(res));
+                }
+                Kind::FuncDef => {
+                    let res = self.parse_func_def(&item);
+                    items.push(DeclOrFuncDef::FuncDef(res));
+                }
+                _ => ()
+            }
+        }
+        let kind = CompUnitKind{items};
+        return CompUnit{
+            id: self.alloc_node_id(),
+            kind,
+            span: node.text_range().into()
+        }
     }
 
     pub fn parse_formal_params(&mut self, node: &SyntaxNode) -> Vec<FuncFParam> {
@@ -484,20 +508,12 @@ impl AST {
             match child_node.kind() {
                 Kind::Decl => {
                     let decl = self.parse_decl(&child_node);
-                    let line = DeclOrStatement {
-                        id: self.alloc_node_id(),
-                        kind: DeclOrStatementKind::Decl(decl),
-                        span: child_node.text_range().into(),
-                    };
+                    let line = DeclOrStatement::Decl(decl);
                     lines.push(line);
                 }
                 Kind::Statement => {
                     let stmt = self.parse_stmt(&child_node);
-                    let line = DeclOrStatement {
-                        id: self.alloc_node_id(),
-                        kind: DeclOrStatementKind::Statement(stmt),
-                        span: child_node.text_range().into(),
-                    };
+                    let line = DeclOrStatement::Statement(stmt);
                     lines.push(line);
                 }
                 _ => (),
@@ -820,7 +836,6 @@ impl AST {
                     Kind::LeftValue => return self.parse_subscript_exp(&node),
                     _ => panic!("Expect one type of *Exp CST Node"),
                 }
-                //todo!()
             }
         }
         //panic!("Expect a node");
