@@ -295,28 +295,21 @@ impl AST {
     /// or
     /// 2. have only one child but the child is a token
     pub fn parse_expr(&mut self, elem: &SyntaxElement) -> Expr {
-        if let Some(node) = elem.as_node().to_owned() {
-            let mut node = node;
-            let mut childs = Self::get_child_elem(node, true, true, true);
-            {
-                while node.children_with_tokens().count() == 1{
-                    if let Some(child_node) = node.first_child(){
-                        node = child_node;
-                    }
-                }
-            }
+        if let Some(node) = elem.as_node() {
+            let mut node = node.clone();
+            let mut childs = Self::get_child_elem(&node, true, true, true);
+
             while childs.len() == 1 {
-                if let Some(new_node) = childs.get(0).unwrap().as_node() {
-                    node = new_node;
-                    childs = Self::get_child_elem(node, true, true, true);
+                if let Some(child_node) = node.first_child() {
+                    node = child_node;
                 } else {
                     break;
                 }
             }
 
-            if Self::get_child_elem(node, true, true, true).len() == 1 {
+            if childs.len() == 1 {
                 // only two possible: 1. a LVAL(ident) 2. a number
-                let cur_node = node.to_owned();
+                let cur_node = node;
                 match cur_node.kind() {
                     Kind::LeftValue => {
                         let ident = Self::get_first_token_skip_ws_cmt(&cur_node).unwrap();
@@ -324,16 +317,17 @@ impl AST {
                         return Expr {
                             id: self.alloc_node_id(),
                             kind: reskind,
-                            span: ident.text_range().into()
-                        }
+                            span: ident.text_range().into(),
+                        };
                     }
                     Kind::Number => {
                         return self.parse_expr(&SyntaxElement::Node(cur_node));
                     }
-                    _ => ()
+                    _ => (),
                 }
             } else {
                 // other possibility of Expr
+                todo!()
             }
         } else {
             panic!("Expect a node");
