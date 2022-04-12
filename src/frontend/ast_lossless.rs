@@ -288,7 +288,43 @@ impl AST {
             .cloned()
     }
 
-    ///
+    pub fn parse_decl(&mut self, node: &SyntaxNode) -> Decl {
+        todo!()
+    }
+
+    /// Vec<DeclOrStatement>
+    pub fn parse_block(&mut self, node: &SyntaxNode) -> Block {
+        let block_items: Vec<_> = Self::get_child_elem(node, true, false, true).iter().map(|x|x.as_node().unwrap().clone()).collect();
+        let mut lines: Vec<DeclOrStatement> = Vec::new();
+        for block_item in block_items{
+            let child_node = block_item.first_child().unwrap();
+            match child_node.kind() {
+                Kind::Decl => {
+                    let decl = self.parse_decl(&child_node);
+                    let line = DeclOrStatement {
+                        id: self.alloc_node_id(),
+                        kind: DeclOrStatementKind::Decl(decl),
+                        span: child_node.text_range().into()
+                    };
+                    lines.push(line);
+                }
+                Kind::Statement => {
+                    let stmt = self.parse_stmt(&child_node);
+                    let line = DeclOrStatement {
+                        id: self.alloc_node_id(),
+                        kind: DeclOrStatementKind::Statement(stmt),
+                        span: child_node.text_range().into()
+                    };
+                    lines.push(line);
+                }
+                _ => ()
+            }
+        }
+        let reskind = BlockKind{items: lines};
+        return Block { id: self.alloc_node_id(), kind: reskind, span: node.text_range().into() }
+    }
+
+    /// TODO: parse_block
     pub fn parse_stmt(&mut self, node: &SyntaxNode) -> Statement {
         assert_eq!(node.kind(), Kind::Statement);
         let first = Self::get_first_token_skip_ws_cmt(node).unwrap();
@@ -308,8 +344,13 @@ impl AST {
                 };
             }
             Kind::LCurly => {
+                let block = self.parse_block(node);
                 // parse block
-                todo!()
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: StatementKind::Block(block),
+                    span: node.text_range().into()
+                }
             }
             Kind::IfKeyword => {
                 let cond = self.parse_expr(&it.next().unwrap());
