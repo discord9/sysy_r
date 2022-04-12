@@ -289,7 +289,36 @@ impl AST {
     }
 
     /// ConstInitVal or InitVal
-    pub fn parse_init_val(&mut self, node: &SyntaxNode, is_const: bool) -> InitVal {
+    pub fn parse_init_val(&mut self, node: &SyntaxNode) -> InitVal {
+        let item = node.first_child().unwrap();
+        match item.kind() {
+            Kind::Expression | Kind::ConstExp => {
+                let exp = self.parse_expr(&item);
+                let kind = ExpOrInitValKind::Exp(exp);
+                return InitVal {
+                    id: self.alloc_node_id(),
+                    kind,
+                    span: item.text_range().into(),
+                };
+            }
+            Kind::InitVal | Kind::ConstInitVal => {
+                let mut it = node.children();
+                it.next();
+                let mut arr = Vec::new();
+                arr.push(self.parse_init_val(&item));
+                for elem in it{
+                    arr.push(self.parse_init_val(&elem));
+                }
+                let kind = ExpOrInitValKind::InitVals(arr);
+                return InitVal{
+                    id: self.alloc_node_id(),
+                    kind,
+                    span: node.text_range().into()
+                }
+            }
+            _ => ()
+        }
+
         todo!()
     }
 
@@ -306,9 +335,7 @@ impl AST {
         for exp_or_init_val in exps_cst {
             match exp_or_init_val.kind() {
                 Kind::ConstExp => shape.push(self.parse_expr(&exp_or_init_val)),
-                Kind::ConstInitVal | Kind::InitVal => {
-                    init_val = Some(self.parse_init_val(node, is_const))
-                }
+                Kind::ConstInitVal | Kind::InitVal => init_val = Some(self.parse_init_val(node)),
                 _ => unreachable!(),
             }
         }
