@@ -303,9 +303,7 @@ impl AST {
             }
             Kind::InitVal | Kind::ConstInitVal => {
                 let mut it = node.children();
-                it.next();
                 let mut arr = Vec::new();
-                arr.push(self.parse_init_val(&item));
                 for elem in it{
                     arr.push(self.parse_init_val(&elem));
                 }
@@ -316,10 +314,8 @@ impl AST {
                     span: node.text_range().into()
                 }
             }
-            _ => ()
+            _ => unreachable!()
         }
-
-        todo!()
     }
 
     /// Ident { '[' ConstExp ']' } '=' ConstInitVal
