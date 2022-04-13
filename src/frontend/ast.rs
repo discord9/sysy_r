@@ -875,7 +875,7 @@ impl AST {
                     Kind::MulExp | Kind::AddExp => return self.parse_binary_exp(&node),
                     // compare exp, can chain together for compare
                     Kind::RelationExp | Kind::EqExp => return self.parse_compare_exp(&node),
-                    /// Bool exp, chain together with same BoolOp, for short circuit
+                    // Bool exp, chain together with same BoolOp, for short circuit
                     Kind::LogicAndExp | Kind::LogicOrExp => return self.parse_bool_exp(&node),
                     // more than one child elems means subscript
                     Kind::LeftValue => return self.parse_subscript_exp(&node),
