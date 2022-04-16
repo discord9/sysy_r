@@ -13,3 +13,4 @@ proptest = "1.0.0"
 ron = "0.7.0"
 rowan = "0.15.4"
 serde = "1.0.136"
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm13-0"] }

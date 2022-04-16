@@ -1,2 +1,3 @@
-mod reg_kind;
+//mod reg_kind;
 mod ast;
+mod valid_attr;

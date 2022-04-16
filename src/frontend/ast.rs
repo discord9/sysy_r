@@ -483,11 +483,13 @@ impl AST {
             "float" => BasicTypeKind::Float,
             _ => unreachable!(),
         };
+        
         BasicType {
             id: self.alloc_node_id(),
             kind: reskind,
             span: token.text_range().into(),
         }
+        
     }
 
     /// ConstDecl or VarDecl
