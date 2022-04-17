@@ -10,7 +10,6 @@
 //! ```
 //! layer AST on top of `SyntaxNode` API.
 
-// TODO: Remove after completed
 use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
 use rowan::{TextRange};
@@ -37,7 +36,7 @@ impl From<SyntaxToken> for Span {
         Self(node.text_range().start().into(), node.text_range().end().into())
     }
 }
-
+pub type NodeId = usize;
 // TODO: impl serialize manually for ASTNode
 macro_rules! decl_ast_node {
     ($(($ast: ident, $astkind: ident) ),*) => {
@@ -45,7 +44,7 @@ macro_rules! decl_ast_node {
         #[derive(Serialize, Deserialize, Debug)]
         pub struct $ast {
             pub kind: $astkind,
-            pub id: usize,
+            pub id: NodeId,
             pub span: Span
         }
     )*
@@ -126,7 +125,7 @@ decl_ast_node!((FuncFParam, FuncFParamKind));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BlockKind {
-    items: Vec<(DeclOrStatement)>,
+    items: Vec<DeclOrStatement>,
 }
 decl_ast_node!((Block, BlockKind));
 
@@ -207,7 +206,13 @@ pub enum ExprKind {
     /// `a[b]`
     Subscript { value: Box<Expr>, slice: Box<Expr> },
 }
-
+/*#[derive(Serialize, Deserialize, Debug)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub id: usize,
+    pub span: Span,
+    pub dtype: IntOrFloatKind
+}*/
 decl_ast_node!((Expr, ExprKind));
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -218,7 +223,7 @@ pub enum IntOrFloatKind {
 
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
-type NodeId = usize;
+//type NodeId = usize;
 /// Convert CST to AST
 #[allow(unused)]
 pub struct AST {
@@ -678,7 +683,7 @@ impl AST {
                 return Expr {
                     id: self.alloc_node_id(),
                     kind: reskind,
-                    span: node.text_range().into(),
+                    span: node.text_range().into()
                 };
             } else if matches!(token.kind(), Kind::Ident) {
                 // UnaryExp -> Ident `(` FuncRParams `)`
@@ -738,7 +743,7 @@ impl AST {
     pub fn parse_binary_exp(&mut self, node: &SyntaxNode) -> Expr {
         let childs = Self::get_child_elem(node, true, true, true);
         let start_loc: usize = childs.get(0).unwrap().text_range().start().into();
-        /// mark the range of end and start for span
+        // mark the range of end and start for span
         let mut end_loc = start_loc;
         let mut it = childs.iter();
         let first = it.next().unwrap().as_node().unwrap();
@@ -873,7 +878,7 @@ impl AST {
                 match node.kind() {
                     Kind::PrimaryExp => return self.parse_primary_exp(&node),
                     Kind::UnaryExp => return self.parse_unary_exp(&node),
-                    /// binary op
+                    // binary op
                     Kind::MulExp | Kind::AddExp => return self.parse_binary_exp(&node),
                     // compare exp, can chain together for compare
                     Kind::RelationExp | Kind::EqExp => return self.parse_compare_exp(&node),

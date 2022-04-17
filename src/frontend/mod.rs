@@ -1,3 +1,3 @@
 //mod reg_kind;
-mod ast;
+pub mod ast;
 mod valid_attr;

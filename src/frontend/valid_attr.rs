@@ -1,33 +1,228 @@
 //! 1. Const-folding
 //!
 //! 2. InitVal check and folding
+use std::collections::HashMap;
 
-struct array_const {
-    raw_values: IntOrFloatArray,
-    shape: (usize, usize),
-    dtype: TypeConst,
+use inkwell::OptimizationLevel;
+use ndarray::ArrayD;
+
+use crate::frontend::ast::{CompUnit, Expr, NodeId};
+
+pub struct SemanticAnalysis {
+    /// Const Folding all NodeId should belong to Expr
+    const_exp: HashMap<NodeId, NumberValue>,
+    /// n-dim array. Separate storage for different type
+    ndarray_int: HashMap<NodeId, ArrayD<i32>>,
+    ndarray_float: HashMap<NodeId, ArrayD<f32>>,
+    comp_unit: CompUnit,
+    // Context?
+}
+impl SemanticAnalysis {
+    fn folding_const(&mut self, expr: &Expr) {
+        let ret = self.eval_expr(expr);
+        self.const_exp.insert(expr.id, ret);
+    }
+    fn eval_expr(&mut self, expr: &Expr) -> NumberValue {
+        use crate::frontend::ast::{ExprKind::*, IntOrFloat, IntOrFloatKind};
+        use crate::syntax::SyntaxKind as Kind;
+        use Kind::*;
+        use NumberValue::*;
+        match &expr.kind {
+            Call { id, args } => {
+                todo!()
+                // TODO: Context related
+            }
+            BinOp { op, left, right } => {
+                let left = self.eval_expr(left);
+                let right = self.eval_expr(right);
+                if left.as_float().is_some() || right.as_float().is_some() {
+                    let l = left.to_float();
+                    let r = right.to_float();
+                    let ret = {
+                        match op {
+                            OpAdd => l + r,
+                            OpSub => l - r,
+                            OpMul => l * r,
+                            OpDiv => l / r,
+                            OpMod => l % r,
+                            _ => unreachable!(),
+                        }
+                    };
+                    return NumberValue::Float(ret);
+                } else {
+                    let l = left.to_int();
+                    let r = right.to_int();
+                    let ret = {
+                        match op {
+                            OpAdd => l + r,
+                            OpSub => l - r,
+                            OpMul => l * r,
+                            OpDiv => l / r,
+                            OpMod => l % r,
+                            _ => unreachable!(),
+                        }
+                    };
+                    return NumberValue::Int(ret);
+                }
+            }
+            BoolOp { op, args } => {
+                // all predicts should be int
+                // need for short circuit here
+                match op {
+                    OpAnd => {
+                        // short circuit
+                        for exp in args {
+                            let predicate = self
+                                .eval_expr(exp)
+                                .as_int()
+                                .expect("All predicates should be integer!");
+                            if predicate == 0 {
+                                return Int(0);
+                            }
+                        }
+                        return Int(1);
+                    }
+                    OpOr => {
+                        // short circuit
+                        for exp in args {
+                            let predicate = self
+                                .eval_expr(exp)
+                                .as_int()
+                                .expect("All predicates should be integer!");
+                            if predicate != 0 {
+                                return Int(1);
+                            }
+                        }
+                        return Int(0);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            UnaryOp { op, val } => {
+                let val = self.eval_expr(val);
+                return match op {
+                    OpAdd => val,
+                    OpSub => match val {
+                        Int(num) => Int(-num),
+                        Float(num) => Float(-num),
+                    },
+                    OpNot => {
+                        // only appear in cond
+                        if let Int(0) = val {
+                            Int(1)
+                        } else if let Int(_) = val {
+                            Int(0)
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            CmpOp {
+                op,
+                left,
+                comparators,
+            } => {
+                let mut l = self.eval_expr(left);
+                for (op, com) in op.iter().zip(comparators.iter()) {
+                    let r = self.eval_expr(com);
+                    let res = match op {
+                        OpLT => l < r,
+                        OpGT => l > r,
+                        OpNG => l <= r,
+                        OpNL => l >= r,
+                        OpEQ => l == r,
+                        OpNE => l != r,
+                        _ => unreachable!(),
+                    };
+                    if !res {
+                        return Int(0);
+                    }
+                }
+                return Int(1);
+            }
+            Constant(num) => {
+                match num.kind{
+                    IntOrFloatKind::Float(num) => return NumberValue::Float(num),
+                    IntOrFloatKind::Int(num) => return NumberValue::Int(num)
+                }
+            }
+            Name(name) => {
+                // Context related
+            }
+            Subscript { value, slice } => {
+                // Context related
+                todo!()
+            }
+            _ => (),
+        }
+        todo!()
+    }
+}
+#[derive(Debug)]
+pub enum NumberValue {
+    Int(i32),
+    Float(f32),
+}
+use std::cmp::Ordering;
+impl PartialOrd for NumberValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        use NumberValue::*;
+        match (self, other) {
+            (Int(l), Int(r)) => return Some(l.cmp(r)),
+            _ => (),
+        };
+        return self.to_float().partial_cmp(&other.to_float());
+    }
+}
+impl PartialEq for NumberValue {
+    fn eq(&self, other: &Self) -> bool {
+        use NumberValue::*;
+        match (self, other) {
+            (Int(l), Int(r)) => return l == r,
+            _ => (),
+        };
+        self.to_float() == other.to_float()
+    }
 }
 
-impl array_const {
-    fn zeros(h: usize, w: usize, dtype: TypeConst) -> Self {
-        let raw_values = match dtype {
-            TypeConst::Int => IntOrFloatArray::IntArray(Vec::with_capacity(h * w)),
-            TypeConst::Float => IntOrFloatArray::FloatArray(Vec::with_capacity(h * w)),
-        };
-        Self {
-            raw_values,
-            shape: (h, w),
-            dtype
+impl NumberValue {
+    /// if is type int return num else none
+    fn as_int(&self) -> Option<i32> {
+        use NumberValue::*;
+        match self {
+            Int(num) => Some(*num),
+            _ => None,
+        }
+    }
+    /// if is type float return num else none
+    fn as_float(&self) -> Option<f32> {
+        use NumberValue::*;
+        match self {
+            Float(num) => Some(*num),
+            _ => None,
+        }
+    }
+    fn to_float(&self) -> f32 {
+        use NumberValue::*;
+        match self {
+            Float(num) => *num,
+            Int(num) => *num as f32,
+        }
+    }
+    fn to_int(&self) -> i32 {
+        use NumberValue::*;
+        match self {
+            Float(num) => *num as i32,
+            Int(num) => *num,
         }
     }
 }
 
-enum TypeConst {
-    Int,
-    Float,
-}
-
-enum IntOrFloatArray {
-    IntArray(Vec<i32>),
-    FloatArray(Vec<f32>),
+#[test]
+fn cmp_number() {
+    let a = NumberValue::Float(0.0);
+    let b = NumberValue::Int(1);
+    assert!(a < b);
 }
