@@ -917,7 +917,14 @@ impl AST {
         panic!("Expect a Number CST Node.")
     }
 }
-
+pub fn text2ast(text: &str)->CompUnit{
+    use crate::cst::parse;
+    let parse = parse(text);
+    let node = parse.syntax();
+    let mut ast = AST::new();
+    let cu = ast.parse_comp_unit(&node);
+    cu
+}
 #[test]
 fn test_integrate_manual() {
     use crate::cst::{output_cst, parse};
