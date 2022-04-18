@@ -3,17 +3,68 @@
 //! 2. InitVal check and folding
 use std::collections::HashMap;
 
-use inkwell::OptimizationLevel;
-use ndarray::ArrayD;
-
 use crate::frontend::ast::{CompUnit, Expr, NodeId};
 
+pub struct ConstArray{
+    shape: Vec<usize>,
+    cols: Vec<usize>,// one cols of n-th dimension
+    content: ArrayContent
+}
+impl ConstArray {
+    fn init_with(shape: &[usize],num: NumberValue)->Self{
+        let tot_len = shape.iter().fold(1, |acc, x|acc*x);
+        Self{
+            shape: shape.to_vec(),
+            cols: shape.iter().rev().scan(1,|state, &x|{
+                let ret = *state;
+                *state *= x;
+                Some(ret)
+            }).collect(),
+            content: match num{
+                NumberValue::Float(num)=>ArrayContent::Float(vec![num;tot_len]),
+                NumberValue::Int(num)=>ArrayContent::Int(vec![num;tot_len])
+            }
+        }
+    }
+    fn get(&self,index: &[usize])->Option<NumberValue>{
+        if index.len()!= self.shape.len(){return None}
+        for (i, s) in index.iter().zip(self.shape.iter()){
+            if i>=s{return None}
+        }
+        // manually sim multidimension array
+        let offset = self.cols.iter().zip(index.iter()).fold(0,|acc,(&col, &idx)|acc + col * idx);
+        self.content.get(offset)
+    }
+}
+pub enum ArrayContent {
+    Int(Vec<i32>),
+    Float(Vec<f32>)
+}
+impl ArrayContent{
+    fn get(&self, idx: usize)->Option<NumberValue>{
+        use NumberValue::*;
+        match self{
+            ArrayContent::Float(v)=>
+                {
+                    match v.get(idx){
+                        Some(i) => Some(Float(*i)),
+                        None => None
+                    }
+                },
+            ArrayContent::Int(v)=>{
+                match v.get(idx){
+                    Some(i) => Some(Int(*i)),
+                    None => None
+                }
+            }
+        }
+    }
+}
 pub struct SemanticAnalysis {
     /// Const Folding all NodeId should belong to Expr
     const_exp: HashMap<NodeId, NumberValue>,
-    /// n-dim array. Separate storage for different type
-    ndarray_int: HashMap<NodeId, ArrayD<i32>>,
-    ndarray_float: HashMap<NodeId, ArrayD<f32>>,
+    /// Constant Array of arbitrary dimension
+    const_array: HashMap<NodeId, ConstArray>,
     comp_unit: CompUnit,
     // Context?
 }
