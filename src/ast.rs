@@ -1,6 +1,7 @@
 //! Abstract Syntax Tree
 //!
 //! TODO: Add Range for AST node
+//! TODO: Deprecate
 #![allow(unused)]
 use crate::cst::{parse, SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;

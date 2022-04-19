@@ -60,18 +60,30 @@ impl ArrayContent{
         }
     }
 }
+
+/// const
+pub struct ScopeAnalysis {
+    /// actual var value is on `NodeId` Node
+    variables: HashMap<String, NodeId>,
+    /// constant value, being fold in constant folding
+    constants: HashMap<String, NodeId>
+}
+
 pub struct SemanticAnalysis {
-    /// Const Folding all NodeId should belong to Expr
+    /// The result of Const Folding of ast node, NodeId should belong to a `Expr`.
     const_exp: HashMap<NodeId, NumberValue>,
-    /// Constant Array of arbitrary dimension
+    /// Constant Array of arbitrary dimension, as a result of Const folding, point to a ast node of `InitVals`
     const_array: HashMap<NodeId, ConstArray>,
     comp_unit: CompUnit,
     // Context?
 }
 impl SemanticAnalysis {
-    fn folding_const(&mut self, expr: &Expr) {
-        let ret = self.eval_expr(expr);
-        self.const_exp.insert(expr.id, ret);
+    fn folding_const(&mut self, cu: &CompUnit) {
+        for decl_or_func_def in &cu.kind.items{
+
+        }
+        //let ret = self.eval_expr(expr);
+        //self.const_exp.insert(expr.id, ret);
     }
     fn eval_expr(&mut self, expr: &Expr) -> NumberValue {
         use crate::frontend::ast::{ExprKind::*, IntOrFloat, IntOrFloatKind};
@@ -276,4 +288,9 @@ fn cmp_number() {
     let a = NumberValue::Float(0.0);
     let b = NumberValue::Int(1);
     assert!(a < b);
+}
+
+#[test]
+fn test_const_folding_no_context() {
+    use crate::frontend::ast::text2ast;
 }

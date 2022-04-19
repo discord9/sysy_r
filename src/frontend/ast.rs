@@ -2,17 +2,17 @@
 //!
 //! Refactory AST to
 //! ```
-//! pub struct $node {
-//!     pub id: NodeId,
-//!     pub kind: $node Kind,
-//!     pub elem: CSTElement,
+//! pub struct node {
+//!        pub kind: astkind,
+//!        pub id: NodeId,
+//!        pub span: Span
 //! }
 //! ```
 //! layer AST on top of `SyntaxNode` API.
 
 use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
-use rowan::{TextRange};
+use rowan::TextRange;
 use serde::{Deserialize, Serialize};
 
 /// a wrapper for syntax element
@@ -27,13 +27,19 @@ impl From<TextRange> for Span {
 
 impl From<SyntaxNode> for Span {
     fn from(node: SyntaxNode) -> Self {
-        Self(node.text_range().start().into(), node.text_range().end().into())
+        Self(
+            node.text_range().start().into(),
+            node.text_range().end().into(),
+        )
     }
 }
 
 impl From<SyntaxToken> for Span {
     fn from(node: SyntaxToken) -> Self {
-        Self(node.text_range().start().into(), node.text_range().end().into())
+        Self(
+            node.text_range().start().into(),
+            node.text_range().end().into(),
+        )
     }
 }
 pub type NodeId = usize;
@@ -55,7 +61,7 @@ macro_rules! decl_ast_node {
 // TODO: write a better state machine for choosing CST node and convert to AST
 #[derive(Serialize, Deserialize, Debug)]
 pub struct CompUnitKind {
-    items: Vec<DeclOrFuncDef>,
+    pub items: Vec<DeclOrFuncDef>,
 }
 decl_ast_node!((CompUnit, CompUnitKind));
 
@@ -69,9 +75,9 @@ pub enum DeclOrFuncDef {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeclKind {
-    is_const: bool,
-    btype: BasicType,
-    defs: Vec<Def>,
+    pub is_const: bool,
+    pub btype: BasicType,
+    pub defs: Vec<Def>,
 }
 decl_ast_node!((Decl, DeclKind));
 #[derive(Serialize, Deserialize, Debug)]
@@ -89,7 +95,7 @@ decl_ast_node!((FuncDef, FuncDefKind));
 pub struct DefKind {
     is_const: bool, // if not const InitVal can be optional
     ident: String,
-    shape: Vec<Expr>,          // const when is_empty then a normal var
+    shape: Vec<Expr>,          // constant Expr, when is_empty() define a normal var
     init_val: Option<InitVal>, //const_init_val:
 }
 
@@ -313,11 +319,13 @@ impl AST {
     /// NOTE: skip white space and comment
     fn get_first_token_skip_ws_cmt(node: &SyntaxNode) -> Option<SyntaxToken> {
         let ret = Self::get_child_elem(node, true, true, false)
-            .get(0).cloned();
-        if let Some(tok) = ret{
-            tok.as_token()
-            .cloned()
-        }else{None}
+            .get(0)
+            .cloned();
+        if let Some(tok) = ret {
+            tok.as_token().cloned()
+        } else {
+            None
+        }
     }
 
     /// constDecl Decl FuncDef
@@ -462,7 +470,7 @@ impl AST {
         for exp_or_init_val in exps_cst {
             match exp_or_init_val.kind() {
                 Kind::ConstExp => shape.push(self.parse_expr(&exp_or_init_val)),
-                Kind::ConstInitVal | Kind::InitVal => init_val = Some(self.parse_init_val(node)),
+                Kind::ConstInitVal | Kind::InitVal => init_val = Some(self.parse_init_val(&exp_or_init_val)),
                 _ => unreachable!(),
             }
         }
@@ -488,13 +496,12 @@ impl AST {
             "float" => BasicTypeKind::Float,
             _ => unreachable!(),
         };
-        
+
         BasicType {
             id: self.alloc_node_id(),
             kind: reskind,
             span: token.text_range().into(),
         }
-        
     }
 
     /// ConstDecl or VarDecl
@@ -653,16 +660,17 @@ impl AST {
             }
             _ => {
                 let first_child = node.first_child().unwrap();
-                if first_child.kind()==Kind::Expression{
+                if first_child.kind() == Kind::Expression {
                     let kind = StatementKind::Expr(self.parse_expr(&first_child));
-                    return Statement{
+                    return Statement {
                         id: self.alloc_node_id(),
                         kind,
-                        span: first_child.into()
-                    }
+                        span: first_child.into(),
+                    };
                 }
 
-                panic!("Expect statement CST node")},
+                panic!("Expect statement CST node")
+            }
         }
     }
 
@@ -683,7 +691,7 @@ impl AST {
                 return Expr {
                     id: self.alloc_node_id(),
                     kind: reskind,
-                    span: node.text_range().into()
+                    span: node.text_range().into(),
                 };
             } else if matches!(token.kind(), Kind::Ident) {
                 // UnaryExp -> Ident `(` FuncRParams `)`
@@ -864,11 +872,11 @@ impl AST {
                     Kind::Number => {
                         let ret = self.parse_number(&cur_node);
                         let kind = ExprKind::Constant(ret);
-                        return Expr{
+                        return Expr {
                             id: self.alloc_node_id(),
                             kind,
-                            span: cur_node.into()
-                        }
+                            span: cur_node.into(),
+                        };
                     }
                     _ => (),
                 }
@@ -897,27 +905,26 @@ impl AST {
 
     /// Accept a Number compsite node
     pub fn parse_number(&mut self, node: &SyntaxNode) -> IntOrFloat {
-         
-            //let node = elem;
-            if !matches!(node.kind(), Kind::Number) {
-                panic!("Expect a number node");
-            }
-            let tok = Self::get_first_token_skip_ws_cmt(node).expect("Expect a number");
-            let reskind = match tok.kind() {
-                Kind::IntConst => IntOrFloatKind::Int(tok.text().parse::<i32>().unwrap()),
-                Kind::FloatConst => IntOrFloatKind::Float(tok.text().parse::<f32>().unwrap()),
-                _ => panic!("Expect a float or int"),
-            };
-            return IntOrFloat {
-                id: self.alloc_node_id(),
-                kind: reskind,
-                span: tok.text_range().into(),
-            };
-        
+        //let node = elem;
+        if !matches!(node.kind(), Kind::Number) {
+            panic!("Expect a number node");
+        }
+        let tok = Self::get_first_token_skip_ws_cmt(node).expect("Expect a number");
+        let reskind = match tok.kind() {
+            Kind::IntConst => IntOrFloatKind::Int(tok.text().parse::<i32>().unwrap()),
+            Kind::FloatConst => IntOrFloatKind::Float(tok.text().parse::<f32>().unwrap()),
+            _ => panic!("Expect a float or int"),
+        };
+        return IntOrFloat {
+            id: self.alloc_node_id(),
+            kind: reskind,
+            span: tok.text_range().into(),
+        };
+
         panic!("Expect a Number CST Node.")
     }
 }
-pub fn text2ast(text: &str)->CompUnit{
+pub fn text2ast(text: &str) -> CompUnit {
     use crate::cst::parse;
     let parse = parse(text);
     let node = parse.syntax();
@@ -935,9 +942,8 @@ fn test_integrate_manual() {
         }
         if(1+2*3%4/5==6)return 0;
     }";
-    let text = "int main(){
-        if(1+2*3%4/5==6)return 0;
-    }";
+    let text = "
+        const int a[5]={0, 1, 2, 3, 4};";
     let parse = parse(text);
     println!("Errors: {:?}", parse.errors);
     let node = parse.syntax();
