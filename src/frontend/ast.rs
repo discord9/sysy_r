@@ -115,7 +115,7 @@ decl_ast_node!((ExpOrInitVal, ExpOrInitValKind));
 
 type InitVal = ExpOrInitVal;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum BasicTypeKind {
     Int,
     Float,
@@ -255,6 +255,16 @@ pub struct AST {
     pub name2index: HashMap<String, Vec<SymbolIndex>>,
 }
 impl AST {
+    /// retrun a Ident from a CST ident token
+    pub fn get_ident(&mut self, ident: &SyntaxToken) -> Ident {
+        let name = ident.text().to_string();
+        let span = ident.text_range();
+        let sym = self.get_symbol(&name).unwrap();
+        Ident {
+            name: sym,
+            span: span.into(),
+        }
+    }
     pub fn new() -> Self {
         let sym_in_scopes = vec![ScopeContent::new_empty(ScopeType::Global)];
         Self {
@@ -386,7 +396,7 @@ impl AST {
             let btype = self.parse_btype_token(&tokens[0]);
             let name = tokens[1].text().to_string();
             let sym =
-                self.insert_symbol(name, (FuncOrVarKind::Var, btype.kind), ScopeType::FuncParam);
+                self.insert_symbol(name, (FuncOrVarKind::Var, btype.kind.clone()), ScopeType::FuncParam);
             let ident = Ident {
                 name: sym,
                 span: tokens[1].text_range().into(),
@@ -512,7 +522,8 @@ impl AST {
         assert_eq!(ident.kind(), Kind::Ident);
         let name = ident.text().to_string();
         let span = ident.text_range();
-        let sym = self.insert_symbol(name, (FuncOrVarKind::Var, btype), self.get_current_scope());
+        let scope = self.get_current_scope();
+        let sym = self.insert_symbol(name, (FuncOrVarKind::Var, btype), scope);
         let ident = Ident {
             name: sym,
             span: span.into(),
@@ -582,7 +593,7 @@ impl AST {
         let it = node.children();
         let mut defs: Vec<Def> = Vec::new();
         for def_cst in it {
-            defs.push(self.parse_def(&def_cst, is_const));
+            defs.push(self.parse_def(&def_cst, is_const, btype.kind));
         }
         let reskind = DeclKind {
             is_const,
@@ -756,13 +767,21 @@ impl AST {
                 // UnaryExp -> Ident `(` FuncRParams `)`
                 // FuncRParams → Exp { ',' Exp }
                 let id = Self::get_first_token_skip_ws_cmt(&node).unwrap();
+                let name = id.text().to_string();
+                let sym = self
+                    .get_symbol(&name)
+                    .expect(format!("No define of {name} in current scope.").as_str());
+                let ident = Ident {
+                    name: sym,
+                    span: id.text_range().into(),
+                };
                 let func_real_params = node.first_child().unwrap();
                 let mut args = Vec::new();
                 for exp_cst in func_real_params.children() {
                     args.push(self.parse_expr(&exp_cst));
                 }
                 let reskind = ExprKind::Call {
-                    id: id.text().to_string(),
+                    id: ident,
                     args: args,
                 };
                 return Expr {
@@ -871,7 +890,7 @@ impl AST {
         let mut it = node.children();
         let mut sub_exp = Expr {
             id: self.alloc_node_id(),
-            kind: ExprKind::Name(ident.text().to_string()),
+            kind: ExprKind::Name(self.get_ident(&ident)),
             span: ident.text_range().into(),
         };
         let (mut start_loc, mut end_loc): (usize, usize) = (
@@ -921,7 +940,7 @@ impl AST {
                 match cur_node.kind() {
                     Kind::LeftValue => {
                         let ident = Self::get_first_token_skip_ws_cmt(&cur_node).unwrap();
-                        let reskind = ExprKind::Name(ident.text().to_string());
+                        let reskind = ExprKind::Name(self.get_ident(&ident));
                         return Expr {
                             id: self.alloc_node_id(),
                             kind: reskind,
@@ -1002,7 +1021,11 @@ fn test_integrate_manual() {
         if(1+2*3%4/5==6)return 0;
     }";
     let text = "
-        const int a[5]={0, 1, 2, 3, 4};";
+        const int a[5]={0, 1, 2, 3, 4};
+        int main(){
+            a[0]=2;
+        }
+        ";
     let parse = parse(text);
     println!("Errors: {:?}", parse.errors);
     let node = parse.syntax();
@@ -1021,4 +1044,5 @@ fn test_integrate_manual() {
         "AST:\n{}",
         to_string_pretty(&cu, pretty.to_owned()).unwrap()
     );
+    println!("Symbol table:{:?}", ast.symbol_table);
 }

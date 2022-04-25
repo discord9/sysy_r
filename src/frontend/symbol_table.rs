@@ -37,32 +37,32 @@ pub struct SymbolDesc {
 
 /// store all `SymbolIndex` in this scope and record scope type
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ScopeContent{
+pub struct ScopeContent {
     /// `SymbolIndex` in this scope
     symbol_indexs: Vec<SymbolIndex>,
-    scope_type: ScopeType
+    scope_type: ScopeType,
 }
-impl ScopeContent{
-    pub fn new_empty(scope_type: ScopeType)->Self{
-        Self{
+impl ScopeContent {
+    pub fn new_empty(scope_type: ScopeType) -> Self {
+        Self {
             symbol_indexs: Vec::new(),
-            scope_type
+            scope_type,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ScopeType {
     /// like a ad hoc extern std func
-    Extern,     
+    Extern,
     /// as a formal param
-    FuncParam,  
+    FuncParam,
     /// In `CompUnit`
-    Global,     
+    Global,
     /// In a `Block`
-    BlockLocal, 
+    BlockLocal,
     /// In a FuncDef
-    Func
+    Func,
 }
 
 // store
@@ -75,11 +75,11 @@ impl AST {
     pub fn enter_scope(&mut self, scope_type: ScopeType) {
         let scope = ScopeContent {
             symbol_indexs: Vec::new(),
-            scope_type
+            scope_type,
         };
         self.sym_in_scopes.push(scope);
     }
-    pub fn exit_expect_scope(&mut self, scope_type: ScopeType){
+    pub fn exit_expect_scope(&mut self, scope_type: ScopeType) {
         assert_eq!(self.get_current_scope(), scope_type);
         self.exit_scope();
     }
@@ -106,8 +106,11 @@ impl AST {
     }
 
     /// Return current scope
-    pub fn get_current_scope(&mut self)->ScopeType{
-        self.sym_in_scopes.last().expect("At least Global scope exist.").scope_type
+    pub fn get_current_scope(&mut self) -> ScopeType {
+        self.sym_in_scopes
+            .last()
+            .expect("At least Global scope exist.")
+            .scope_type
     }
     /// insert a symbol into symbol table
     pub fn insert_symbol(
@@ -115,18 +118,42 @@ impl AST {
         name: String,
         kind: (FuncOrVarKind, BasicTypeKind),
         scope_type: ScopeType,
-    )->Symbol {
+    ) -> Symbol {
         let id = self.symbol_table.cnt_sym;
         self.symbol_table.cnt_sym.0 += 1;
-        self.symbol_table
-            .table
-            .insert(id, SymbolDesc { name, kind, scope: scope_type });
+        self.symbol_table.table.insert(
+            id,
+            SymbolDesc {
+                name: name.clone(),
+                kind,
+                scope: scope_type,
+            },
+        );
         // add this new symbol to current scope
-        assert_eq!(self.sym_in_scopes.last_mut().unwrap().scope_type, scope_type);
-        self.sym_in_scopes.last_mut().unwrap().symbol_indexs.push(id);
+        assert_eq!(
+            self.sym_in_scopes.last_mut().unwrap().scope_type,
+            scope_type
+        );
+        self.sym_in_scopes
+            .last_mut()
+            .unwrap()
+            .symbol_indexs
+            .push(id);
+        match self.name2index.get_mut(&name) {
+            Some(v) => {
+                v.push(id);
+            }
+            None => {
+                self.name2index.insert(name, vec![id]);
+            }
+        }
         Symbol(id)
     }
 
-
-
+    /// search sym_in_scope field to find the actual symbol
+    pub fn get_symbol(&self, name: &String) -> Option<Symbol> {
+        Some(Symbol(
+            *(self.name2index.get(name).unwrap()).last().unwrap(),
+        ))
+    }
 }
