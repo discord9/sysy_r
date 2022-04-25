@@ -1,5 +1,5 @@
-use super::ast::{AST, BasicTypeKind, NodeId, Span};
-use serde::{Serialize, Deserialize};
+use super::ast::{BasicTypeKind, NodeId, Span, AST};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// a index of symbol table
@@ -49,41 +49,42 @@ pub struct Scope {
     scope_type: ScopeType,
     span: Span, // indicate scope start from where in a Block or a CompUnit and end by default is the end of Block or CompUnit
 }
-impl AST{
-        /// TODO:Test enter/exit scope and insert symbol
-        pub fn enter_scope(&mut self) {
-            self.sym_in_scopes.append(&mut Vec::new())
+impl AST {
+    /// TODO:Test enter/exit scope and insert symbol
+    pub fn enter_scope(&mut self) {
+        self.sym_in_scopes.append(&mut Vec::new())
+    }
+    pub fn insert_symbol(
+        &mut self,
+        name: String,
+        kind: (FuncOrVarKind, BasicTypeKind),
+        scope: Scope,
+    ) {
+        let id = self.symbol_table.cnt_sym;
+        self.symbol_table.cnt_sym.0 += 1;
+        self.symbol_table
+            .table
+            .insert(id, SymbolDesc { name, kind, scope });
+    }
+    pub fn exit_scope(&mut self) {
+        let exiting = self
+            .sym_in_scopes
+            .pop()
+            .expect("Expect a scope to exit from!");
+        for idx in exiting {
+            let desc = self
+                .symbol_table
+                .table
+                .get(&idx)
+                .expect(format!("Can't found entry for {:?}", idx).as_str());
+            let name = &desc.name;
+            // remove idx from name2index reverse table
+            let arr_idx = self
+                .name2index
+                .get_mut(name)
+                .expect(format!("Can't found entry for {}", name).as_str());
+            assert_eq!(idx, *arr_idx.last().expect("Expect non empty vecs"));
+            let _last = arr_idx.pop().unwrap();
         }
-        pub fn insert_symbol(
-            &mut self,
-            name: String,
-            kind: (FuncOrVarKind, BasicTypeKind),
-            scope: Scope,
-        ) {
-            let id = self.symbol_table.cnt_sym;
-            self.symbol_table.table.insert(id, SymbolDesc{
-                name,kind,scope
-            });
-        }
-        pub fn exit_scope(&mut self) {
-            let exiting = self
-                .sym_in_scopes
-                .pop()
-                .expect("Expect a scope to exit from!");
-            for idx in exiting {
-                let desc = self
-                    .symbol_table
-                    .table
-                    .get(&idx)
-                    .expect(format!("Can't found entry for {:?}", idx).as_str());
-                let name = &desc.name;
-                // remove idx from name2index reverse table
-                let arr_idx = self
-                    .name2index
-                    .get_mut(name)
-                    .expect(format!("Can't found entry for {}", name).as_str());
-                assert_eq!(idx, *arr_idx.last().expect("Expect non empty vecs"));
-                let _last = arr_idx.pop().unwrap();
-            }
-        }
+    }
 }
