@@ -10,6 +10,8 @@
 //! ```
 //! layer AST on top of `SyntaxNode` API.
 
+use std::collections::HashMap;
+
 use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
 use rowan::TextRange;
@@ -93,10 +95,10 @@ decl_ast_node!((FuncDef, FuncDefKind));
 /// ConstDef or VarDef
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DefKind {
-    is_const: bool, // if not const InitVal can be optional
-    ident: String,
-    shape: Vec<Expr>,          // constant Expr, when is_empty() define a normal var
-    init_val: Option<InitVal>, //const_init_val:
+    pub is_const: bool, // if not const InitVal can be optional
+    pub ident: String,
+    pub shape: Vec<Expr>,          // constant Expr, when is_empty() define a simple var
+    pub init_val: Option<InitVal>, //const_init_val
 }
 
 decl_ast_node!((Def, DefKind));
@@ -220,6 +222,17 @@ pub struct Expr {
     pub dtype: IntOrFloatKind
 }*/
 decl_ast_node!((Expr, ExprKind));
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Ident {
+    pub name: Symbol,
+    pub span: Span,
+}
+
+/// a index of symbol table
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Symbol(SymbolIndex);
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct SymbolIndex(u32);
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum IntOrFloatKind {
@@ -229,16 +242,46 @@ pub enum IntOrFloatKind {
 
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SymbolTable(HashMap<SymbolIndex,SymbolDesc>);
+impl SymbolTable{
+    fn new()->Self{
+        Self(
+            HashMap::new()
+    )
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum FuncOrVarKind{
+    Func,
+    Var
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SymbolDesc{
+    name: String,
+    kind: (FuncOrVarKind, BasicTypeKind),
+    scope: Scope
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Scope{
+    
+}
+
 //type NodeId = usize;
 /// Convert CST to AST
 #[allow(unused)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AST {
     first_unalloc_node_id: NodeId,
+    // TODO: symbol table
+    symbol_table: SymbolTable
 }
 impl AST {
     pub fn new() -> Self {
         Self {
             first_unalloc_node_id: 0,
+            symbol_table: SymbolTable::new()
         }
     }
     fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
