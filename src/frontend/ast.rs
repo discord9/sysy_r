@@ -223,17 +223,6 @@ pub struct Expr {
     pub dtype: IntOrFloatKind
 }*/
 decl_ast_node!((Expr, ExprKind));
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Ident {
-    pub name: Symbol,
-    pub span: Span,
-}
-
-/// a index of symbol table
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Symbol(SymbolIndex);
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
-pub struct SymbolIndex(u32);
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum IntOrFloatKind {
@@ -243,45 +232,12 @@ pub enum IntOrFloatKind {
 
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SymbolTable {
-    table: HashMap<SymbolIndex, SymbolDesc>,
-    cnt_sym: SymbolIndex
-}
-impl SymbolTable {
-    fn new() -> Self {
-        Self{
-            table: HashMap::new(),
-            cnt_sym: SymbolIndex(0)
-        }
-    }
-}
 
+use super::symbol_table::*;
 #[derive(Serialize, Deserialize, Debug)]
-pub enum FuncOrVarKind {
-    Func,
-    Var,
-}
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SymbolDesc {
-    name: String,
-    kind: (FuncOrVarKind, BasicTypeKind),
-    scope: Scope,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ScopeType {
-    Extern,
-    FuncParam,// as a formal param
-    Global,// In CompUnit
-    BlockLocal,// In a block 
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Scope {
-    ast_node: NodeId, // the scope is either entire or partial of that ast_node
-    scope_type: ScopeType,
-    span: Span, // indicate scope start from where in a Block or a CompUnit and end by default is the end of Block or CompUnit
+pub struct Ident {
+    pub name: Symbol,
+    pub span: Span,
 }
 
 //type NodeId = usize;
@@ -289,15 +245,22 @@ pub struct Scope {
 #[allow(unused)]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AST {
+    /// Use to allocate node id
     first_unalloc_node_id: NodeId,
-    // TODO: symbol table
-    symbol_table: SymbolTable,
+    /// TODO: symbol table
+    pub symbol_table: SymbolTable,
+    /// When enter a new scope append a new vector, when exit a scope pop last vec
+    pub sym_in_scopes: Vec<Vec<SymbolIndex>>,
+    /// String to index update coordingly, same name results in append a `SymbolIndex` to coording vec
+    pub name2index: HashMap<String, Vec<SymbolIndex>>,
 }
 impl AST {
     pub fn new() -> Self {
         Self {
             first_unalloc_node_id: 0,
             symbol_table: SymbolTable::new(),
+            sym_in_scopes: Vec::new(),
+            name2index: HashMap::new(),
         }
     }
     fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
