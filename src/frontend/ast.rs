@@ -14,6 +14,7 @@ use std::collections::HashMap;
 
 use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
+use quote::__private::HasIterator;
 use rowan::TextRange;
 use serde::{Deserialize, Serialize};
 
@@ -97,7 +98,7 @@ decl_ast_node!((FuncDef, FuncDefKind));
 pub struct DefKind {
     pub is_const: bool, // if not const InitVal can be optional
     pub ident: String,
-    pub shape: Vec<Expr>,          // constant Expr, when is_empty() define a simple var
+    pub shape: Vec<Expr>, // constant Expr, when is_empty() define a simple var
     pub init_val: Option<InitVal>, //const_init_val
 }
 
@@ -243,29 +244,44 @@ pub enum IntOrFloatKind {
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SymbolTable(HashMap<SymbolIndex,SymbolDesc>);
-impl SymbolTable{
-    fn new()->Self{
-        Self(
-            HashMap::new()
-    )
+pub struct SymbolTable {
+    table: HashMap<SymbolIndex, SymbolDesc>,
+    cnt_sym: SymbolIndex
+}
+impl SymbolTable {
+    fn new() -> Self {
+        Self{
+            table: HashMap::new(),
+            cnt_sym: SymbolIndex(0)
+        }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum FuncOrVarKind{
+pub enum FuncOrVarKind {
     Func,
-    Var
+    Var,
 }
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SymbolDesc{
+pub struct SymbolDesc {
     name: String,
     kind: (FuncOrVarKind, BasicTypeKind),
-    scope: Scope
+    scope: Scope,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Scope{
-    
+pub enum ScopeType {
+    Extern,
+    FuncParam,// as a formal param
+    Global,// In CompUnit
+    BlockLocal,// In a block 
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Scope {
+    ast_node: NodeId, // the scope is either entire or partial of that ast_node
+    scope_type: ScopeType,
+    span: Span, // indicate scope start from where in a Block or a CompUnit and end by default is the end of Block or CompUnit
 }
 
 //type NodeId = usize;
@@ -275,13 +291,13 @@ pub struct Scope{
 pub struct AST {
     first_unalloc_node_id: NodeId,
     // TODO: symbol table
-    symbol_table: SymbolTable
+    symbol_table: SymbolTable,
 }
 impl AST {
     pub fn new() -> Self {
         Self {
             first_unalloc_node_id: 0,
-            symbol_table: SymbolTable::new()
+            symbol_table: SymbolTable::new(),
         }
     }
     fn get_syntax_node<'a>(elem: &'a SyntaxElement, kinds: &[Kind]) -> Option<&'a SyntaxNode> {
@@ -513,7 +529,9 @@ impl AST {
         for exp_or_init_val in exps_cst {
             match exp_or_init_val.kind() {
                 Kind::ConstExp => shape.push(self.parse_expr(&exp_or_init_val)),
-                Kind::ConstInitVal | Kind::InitVal => init_val = Some(self.parse_init_val(&exp_or_init_val)),
+                Kind::ConstInitVal | Kind::InitVal => {
+                    init_val = Some(self.parse_init_val(&exp_or_init_val))
+                }
                 _ => unreachable!(),
             }
         }
