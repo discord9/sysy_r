@@ -14,6 +14,7 @@ use std::collections::HashMap;
 
 use crate::cst::{SyntaxElement, SyntaxNode, SyntaxToken};
 use crate::syntax::SyntaxKind as Kind;
+use proptest::collection::vec;
 use quote::__private::HasIterator;
 use rowan::TextRange;
 use serde::{Deserialize, Serialize};
@@ -86,7 +87,7 @@ decl_ast_node!((Decl, DeclKind));
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FuncDefKind {
     func_type: BasicType,
-    ident: String,
+    ident: Ident,
     formal_params: Vec<FuncFParam>, // if is_empty() then zero args
     block: Block,
 }
@@ -97,7 +98,7 @@ decl_ast_node!((FuncDef, FuncDefKind));
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DefKind {
     pub is_const: bool, // if not const InitVal can be optional
-    pub ident: String,
+    pub ident: Ident,
     pub shape: Vec<Expr>, // constant Expr, when is_empty() define a simple var
     pub init_val: Option<InitVal>, //const_init_val
 }
@@ -125,7 +126,7 @@ decl_ast_node!((BasicType, BasicTypeKind));
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FuncFParamKind {
     btype: BasicType,
-    ident: String,
+    ident: Ident,
     array_shape: Option<Vec<Expr>>,
     // if None, then it is a normal var
     // if not None, default to have `[]` and then zero to multiple `[`Exp`]`
@@ -177,7 +178,7 @@ pub enum ExprKind {
     /// Call to function
     ///
     /// `f(args)`
-    Call { id: String, args: Vec<Expr> },
+    Call { id: Ident, args: Vec<Expr> },
     /// Binary Operator. Note: in CST BinOp is a vec of exp, like vec!\[1+2+3\]
     ///
     /// `+` `-` `*` `/` `%`
@@ -211,7 +212,7 @@ pub enum ExprKind {
     /// int or float
     Constant(IntOrFloat),
     /// Ident
-    Name(String),
+    Name(Ident),
     /// `a[b]`
     Subscript { value: Box<Expr>, slice: Box<Expr> },
 }
@@ -232,7 +233,6 @@ pub enum IntOrFloatKind {
 
 decl_ast_node!((IntOrFloat, IntOrFloatKind));
 
-
 use super::symbol_table::*;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Ident {
@@ -250,16 +250,17 @@ pub struct AST {
     /// TODO: symbol table
     pub symbol_table: SymbolTable,
     /// When enter a new scope append a new vector, when exit a scope pop last vec
-    pub sym_in_scopes: Vec<Vec<SymbolIndex>>,
+    pub sym_in_scopes: Vec<ScopeContent>,
     /// String to index update coordingly, same name results in append a `SymbolIndex` to coording vec
     pub name2index: HashMap<String, Vec<SymbolIndex>>,
 }
 impl AST {
     pub fn new() -> Self {
+        let sym_in_scopes = vec![ScopeContent::new_empty(ScopeType::Global)];
         Self {
             first_unalloc_node_id: 0,
             symbol_table: SymbolTable::new(),
-            sym_in_scopes: Vec::new(),
+            sym_in_scopes,
             name2index: HashMap::new(),
         }
     }
@@ -377,11 +378,19 @@ impl AST {
     pub fn parse_formal_params(&mut self, node: &SyntaxNode) -> Vec<FuncFParam> {
         assert_eq!(node.kind(), Kind::FuncFParams);
         let mut fps = Vec::new();
+        // TODO: in func scope already enter by parse_func
+        //self.enter_scope();
         for formal_param in node.children() {
             assert_eq!(formal_param.kind(), Kind::FuncFParam);
             let tokens = Self::get_child_token(&formal_param, true);
             let btype = self.parse_btype_token(&tokens[0]);
-            let ident = tokens[1].text().to_string();
+            let name = tokens[1].text().to_string();
+            let sym =
+                self.insert_symbol(name, (FuncOrVarKind::Var, btype.kind), ScopeType::FuncParam);
+            let ident = Ident {
+                name: sym,
+                span: tokens[1].text_range().into(),
+            };
             let array_shape = {
                 if let Some(tok) = tokens.get(2) {
                     if tok.kind() == Kind::LBracket {
@@ -421,7 +430,20 @@ impl AST {
             .map(|x| x.as_token().unwrap().clone())
             .collect();
         let func_type = self.parse_btype_token(child_tokens.get(0).unwrap());
-        let ident = child_tokens.get(1).unwrap().text().to_string();
+
+        let name = child_tokens.get(1).unwrap().text().to_string();
+        let span = child_tokens.get(1).unwrap().text_range();
+        let sym = self.insert_symbol(
+            name,
+            (FuncOrVarKind::Func, func_type.kind),
+            ScopeType::Global,
+        );
+        let ident = Ident {
+            name: sym,
+            span: span.into(),
+        };
+        self.enter_scope(ScopeType::Func);
+        self.enter_scope(ScopeType::FuncParam);
         let mut formal_params = Vec::new();
         let mut block = None;
         for child_node in node.children() {
@@ -430,12 +452,17 @@ impl AST {
                     formal_params = self.parse_formal_params(&child_node);
                 }
                 Kind::Block => {
+                    self.exit_expect_scope(ScopeType::FuncParam);
+                    self.enter_scope(ScopeType::BlockLocal);
                     block = Some(self.parse_block(&child_node));
+                    self.exit_expect_scope(ScopeType::BlockLocal);
                     break;
                 }
                 _ => unreachable!(),
             }
         }
+        self.exit_expect_scope(ScopeType::Func);
+
         let kind = FuncDefKind {
             func_type,
             ident,
@@ -480,9 +507,17 @@ impl AST {
     }
 
     /// Ident { '[' ConstExp ']' } '=' ConstInitVal
-    pub fn parse_def(&mut self, node: &SyntaxNode, is_const: bool) -> Def {
+    pub fn parse_def(&mut self, node: &SyntaxNode, is_const: bool, btype: BasicTypeKind) -> Def {
         let ident = Self::get_first_token_skip_ws_cmt(node).unwrap();
         assert_eq!(ident.kind(), Kind::Ident);
+        let name = ident.text().to_string();
+        let span = ident.text_range();
+        let sym = self.insert_symbol(name, (FuncOrVarKind::Var, btype), self.get_current_scope());
+        let ident = Ident {
+            name: sym,
+            span: span.into(),
+        };
+
         let exps_cst: Vec<_> = Self::get_child_elem(node, true, false, true)
             .iter()
             .map(|x| x.as_node().unwrap().clone())
@@ -500,7 +535,7 @@ impl AST {
         }
         let kind = DefKind {
             is_const,
-            ident: ident.text().to_string(),
+            ident,
             shape,
             init_val,
         };

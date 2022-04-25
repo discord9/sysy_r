@@ -32,46 +32,63 @@ pub enum FuncOrVarKind {
 pub struct SymbolDesc {
     name: String,
     kind: (FuncOrVarKind, BasicTypeKind),
-    scope: Scope,
+    scope: ScopeType,
 }
 
+/// store all `SymbolIndex` in this scope and record scope type
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ScopeContent{
+    /// `SymbolIndex` in this scope
+    symbol_indexs: Vec<SymbolIndex>,
+    scope_type: ScopeType
+}
+impl ScopeContent{
+    pub fn new_empty(scope_type: ScopeType)->Self{
+        Self{
+            symbol_indexs: Vec::new(),
+            scope_type
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum ScopeType {
-    Extern,
-    FuncParam,  // as a formal param
-    Global,     // In CompUnit
-    BlockLocal, // In a block
+    /// like a ad hoc extern std func
+    Extern,     
+    /// as a formal param
+    FuncParam,  
+    /// In `CompUnit`
+    Global,     
+    /// In a `Block`
+    BlockLocal, 
+    /// In a FuncDef
+    Func
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Scope {
-    ast_node: NodeId, // the scope is either entire or partial of that ast_node
-    scope_type: ScopeType,
-    span: Span, // indicate scope start from where in a Block or a CompUnit and end by default is the end of Block or CompUnit
-}
+// store
+// #[derive(Serialize, Deserialize, Debug)]
+// pub struct SymbolScope(ScopeType);
+//ast_node: NodeId, // the scope is either entire or partial of that ast_node
+
 impl AST {
     /// TODO:Test enter/exit scope and insert symbol
-    pub fn enter_scope(&mut self) {
-        self.sym_in_scopes.append(&mut Vec::new())
+    pub fn enter_scope(&mut self, scope_type: ScopeType) {
+        let scope = ScopeContent {
+            symbol_indexs: Vec::new(),
+            scope_type
+        };
+        self.sym_in_scopes.push(scope);
     }
-    pub fn insert_symbol(
-        &mut self,
-        name: String,
-        kind: (FuncOrVarKind, BasicTypeKind),
-        scope: Scope,
-    ) {
-        let id = self.symbol_table.cnt_sym;
-        self.symbol_table.cnt_sym.0 += 1;
-        self.symbol_table
-            .table
-            .insert(id, SymbolDesc { name, kind, scope });
+    pub fn exit_expect_scope(&mut self, scope_type: ScopeType){
+        assert_eq!(self.get_current_scope(), scope_type);
+        self.exit_scope();
     }
     pub fn exit_scope(&mut self) {
         let exiting = self
             .sym_in_scopes
             .pop()
             .expect("Expect a scope to exit from!");
-        for idx in exiting {
+        for idx in exiting.symbol_indexs {
             let desc = self
                 .symbol_table
                 .table
@@ -87,4 +104,29 @@ impl AST {
             let _last = arr_idx.pop().unwrap();
         }
     }
+
+    /// Return current scope
+    pub fn get_current_scope(&mut self)->ScopeType{
+        self.sym_in_scopes.last().expect("At least Global scope exist.").scope_type
+    }
+    /// insert a symbol into symbol table
+    pub fn insert_symbol(
+        &mut self,
+        name: String,
+        kind: (FuncOrVarKind, BasicTypeKind),
+        scope_type: ScopeType,
+    )->Symbol {
+        let id = self.symbol_table.cnt_sym;
+        self.symbol_table.cnt_sym.0 += 1;
+        self.symbol_table
+            .table
+            .insert(id, SymbolDesc { name, kind, scope: scope_type });
+        // add this new symbol to current scope
+        assert_eq!(self.sym_in_scopes.last_mut().unwrap().scope_type, scope_type);
+        self.sym_in_scopes.last_mut().unwrap().symbol_indexs.push(id);
+        Symbol(id)
+    }
+
+
+
 }
