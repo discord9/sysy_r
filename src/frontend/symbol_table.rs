@@ -1,4 +1,5 @@
 use super::ast::{BasicTypeKind, NodeId, Span, AST};
+use inkwell::basic_block::BasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -16,6 +17,82 @@ pub struct SymbolTable {
 }
 impl SymbolTable {
     pub fn new() -> Self {
+        use AllTypeKind::*;
+        use FuncOrVarKind::Func as Function;
+        use ScopeType::*;
+        let runtime_lib = HashMap::from([(
+            SymbolIndex(0),
+            SymbolDesc {
+                name: "getint".to_string(),
+                kind: (Function, Int),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(1),
+            SymbolDesc {
+                name: "getch".to_string(),
+                kind: (Function, Int),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(2),
+            SymbolDesc {
+                name: "getfloat".to_string(),
+                kind: (Function, Float),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(3),
+            SymbolDesc {
+                name: "getarray".to_string(),
+                kind: (Function, Int),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(4),
+            SymbolDesc {
+                name: "getfarray".to_string(),
+                kind: (Function, Int),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(5),
+            SymbolDesc {
+                name: "putint".to_string(),
+                kind: (Function, Void),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(6),
+            SymbolDesc {
+                name: "putch".to_string(),
+                kind: (Function, Void),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(7),
+            SymbolDesc {
+                name: "getfloat".to_string(),
+                kind: (Function, Float),
+                scope: Extern,
+            },
+        ),
+        (
+            SymbolIndex(8),
+            SymbolDesc {
+                name: "getarray".to_string(),
+                kind: (Function, Void),
+                scope: Extern,
+            },
+        )
+        ]);
         Self {
             table: HashMap::new(),
             cnt_sym: SymbolIndex(0),
@@ -28,10 +105,29 @@ pub enum FuncOrVarKind {
     Func,
     Var,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum AllTypeKind {
+    Float,
+    Int,
+    Void,
+    Ptr(Box<AllTypeKind>)
+    // more?
+}
+
+impl From<BasicTypeKind> for AllTypeKind {
+    fn from(btype: BasicTypeKind)->Self{
+        match btype {
+            BasicTypeKind::Float => AllTypeKind::Float,
+            BasicTypeKind::Int => AllTypeKind::Int,
+            BasicTypeKind::Void => AllTypeKind::Void
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SymbolDesc {
     name: String,
-    kind: (FuncOrVarKind, BasicTypeKind),
+    kind: (FuncOrVarKind, AllTypeKind),
     scope: ScopeType,
 }
 
@@ -89,17 +185,22 @@ impl AST {
             .pop()
             .expect("Expect a scope to exit from!");
         for idx in exiting.symbol_indexs {
-            let desc = self
-                .symbol_table
-                .table
-                .get(&idx)
-                .expect(format!("Can't found entry for {:?} which should exist in this scope", idx).as_str());
+            let desc = self.symbol_table.table.get(&idx).expect(
+                format!(
+                    "Can't found entry for {:?} which should exist in this scope",
+                    idx
+                )
+                .as_str(),
+            );
             let name = &desc.name;
             // remove idx from name2index reverse table
-            let arr_idx = self
-                .name2index
-                .get_mut(name)
-                .expect(format!("Can't found entry for symbol:{} which should exist in this scope", name).as_str());
+            let arr_idx = self.name2index.get_mut(name).expect(
+                format!(
+                    "Can't found entry for symbol:{} which should exist in this scope",
+                    name
+                )
+                .as_str(),
+            );
             assert_eq!(idx, *arr_idx.last().expect("Expect non empty vecs"));
             let _last = arr_idx.pop().unwrap();
         }
@@ -116,7 +217,7 @@ impl AST {
     pub fn insert_symbol(
         &mut self,
         name: String,
-        kind: (FuncOrVarKind, BasicTypeKind),
+        kind: (FuncOrVarKind, AllTypeKind),
         scope_type: ScopeType,
     ) -> Symbol {
         let id = self.symbol_table.cnt_sym;

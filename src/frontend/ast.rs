@@ -396,7 +396,7 @@ impl AST {
             let btype = self.parse_btype_token(&tokens[0]);
             let name = tokens[1].text().to_string();
             let sym =
-                self.insert_symbol(name, (FuncOrVarKind::Var, btype.kind.clone()), ScopeType::FuncParam);
+                self.insert_symbol(name, (FuncOrVarKind::Var, btype.kind.clone().into()), ScopeType::FuncParam);
             let ident = Ident {
                 name: sym,
                 span: tokens[1].text_range().into(),
@@ -445,7 +445,7 @@ impl AST {
         let span = child_tokens.get(1).unwrap().text_range();
         let sym = self.insert_symbol(
             name,
-            (FuncOrVarKind::Func, func_type.kind),
+            (FuncOrVarKind::Func, func_type.kind.into()),
             ScopeType::Global,
         );
         let ident = Ident {
@@ -523,7 +523,7 @@ impl AST {
         let name = ident.text().to_string();
         let span = ident.text_range();
         let scope = self.get_current_scope();
-        let sym = self.insert_symbol(name, (FuncOrVarKind::Var, btype), scope);
+        let sym = self.insert_symbol(name, (FuncOrVarKind::Var, btype.into()), scope);
         let ident = Ident {
             name: sym,
             span: span.into(),
