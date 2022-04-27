@@ -574,8 +574,16 @@ impl AST {
         }
     }
 
-    /// ConstDecl or VarDecl
+    /// ConstDecl or VarDecl or Decl
     pub fn parse_decl(&mut self, node: &SyntaxNode) -> Decl {
+        let first = node.children().next().expect("Const Decl or Var Decl");
+        let node = if node.kind()!=Kind::Decl{
+            node
+        }else{
+            &first
+        };
+        //println!("Kind:{:?}", node.kind());
+        assert!(node.kind()==Kind::ConstDecl || node.kind()==Kind::VarDecl);
         let childs = Self::get_child_elem(node, true, true, false);
         let mut it_token = childs.iter();
         let mut cur_token = it_token.next().unwrap().as_token().unwrap();
@@ -641,9 +649,18 @@ impl AST {
     /// all of the if while etc.
     pub fn parse_stmt(&mut self, node: &SyntaxNode) -> Statement {
         assert_eq!(node.kind(), Kind::Statement);
+        //println!("Stmt:{:?}", node.text_range());
         let first = Self::get_first_token_skip_ws_cmt(node).unwrap();
         let mut it = node.children();
         match first.kind() {
+            Kind::Semicolon => {
+                let reskind = StatementKind::Empty;
+                return Statement {
+                    id: self.alloc_node_id(),
+                    kind: reskind,
+                    span: node.text_range().into(),
+                }
+            }
             Kind::OpAsg => {
                 let lval = self.parse_subscript_exp(&it.next().unwrap());
                 let exp = self.parse_expr(&it.next().unwrap());
@@ -1021,8 +1038,9 @@ fn test_integrate_manual() {
         if(1+2*3%4/5==6)return 0;
     }";
     let text = "
-        const int a[5]={0, 1, 2, 3, 4};
+        const int a[3]={0, 1, 2};
         int main(){
+            int a[2] = {0, 1};
             a[0]=2;
         }
         ";

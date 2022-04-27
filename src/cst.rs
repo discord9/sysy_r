@@ -260,8 +260,8 @@ impl Parser {
     }
     /// Block → '{' { BlockItem } '}'
     fn block(&mut self) {
-        #[cfg(test)]
-        println!("Call block() on {:?}", self.current());
+        //#[cfg(test)]
+        //println!("Call block() on {:?}", self.current());
         self.builder.start_node(SyntaxKind::Block.into());
         self.bump_expect(Kind::LCurly, "");
         while Some(Kind::RCurly) != self.current()  && None != self.current(){
@@ -273,8 +273,8 @@ impl Parser {
 
     /// BlockItem → Decl | Stmt
     fn block_item(&mut self) {
-        #[cfg(test)]
-        println!("Call block_item() on {:?}", self.current());
+        //#[cfg(test)]
+        //println!("Call block_item() on {:?}", self.current());
         self.builder.start_node(SyntaxKind::BlockItem.into());
         match self.current() {
             Some(Kind::ConstKeyword) | Some(Kind::BType) => self.decl(),
@@ -292,8 +292,8 @@ impl Parser {
     ///
     /// | 'return' \[Exp\] ';'
     fn stmt(&mut self) {
-        #[cfg(test)]
-        println!("Call stmt() on {:?}", self.current());
+        //#[cfg(test)]
+        //println!("Call stmt() on {:?}", self.current());
         use Kind::{
             BreakKeyword, ContinueKeyword, ElseKeyword, Ident, IfKeyword, LCurly, LParen, OpAsg,
             RParen, ReturnKeyword, Semicolon, WhileKeyword,
@@ -392,6 +392,7 @@ impl Parser {
             self.bump();
             self.var_def();
         }
+        self.bump_expect(Kind::Semicolon, "");
         self.builder.finish_node();
     }
     /// VarDef -> Ident { '\[' ConstExp '\]' }
