@@ -93,13 +93,13 @@ impl AST {
                 .symbol_table
                 .table
                 .get(&idx)
-                .expect(format!("Can't found entry for {:?}", idx).as_str());
+                .expect(format!("Can't found entry for {:?} which should exist in this scope", idx).as_str());
             let name = &desc.name;
             // remove idx from name2index reverse table
             let arr_idx = self
                 .name2index
                 .get_mut(name)
-                .expect(format!("Can't found entry for {}", name).as_str());
+                .expect(format!("Can't found entry for symbol:{} which should exist in this scope", name).as_str());
             assert_eq!(idx, *arr_idx.last().expect("Expect non empty vecs"));
             let _last = arr_idx.pop().unwrap();
         }
@@ -109,7 +109,7 @@ impl AST {
     pub fn get_current_scope(&mut self) -> ScopeType {
         self.sym_in_scopes
             .last()
-            .expect("At least Global scope exist.")
+            .expect("At least Global scope shall always exist.")
             .scope_type
     }
     /// insert a symbol into symbol table
