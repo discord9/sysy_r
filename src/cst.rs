@@ -305,7 +305,7 @@ impl Parser {
                 // check ahead to see if a `=` exist in this line of code
                 let mut flag = false;
                 let mut ahead = 0;
-                // TODO: better predicate
+                // TODO: better predicate, maybe mutable builder?use builder.checkpoint()
                 // bugs in here!!! if no semicolon present will loop to eof!
                 while self.peek_skip(ahead) != Some(Semicolon)  && self.peek_skip(ahead)!= None{
                     //println!("")
