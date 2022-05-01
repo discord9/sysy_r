@@ -86,10 +86,10 @@ pub struct DeclKind {
 decl_ast_node!((Decl, DeclKind));
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FuncDefKind {
-    func_type: BasicType,
-    ident: Ident,
-    formal_params: Vec<FuncFParam>, // if is_empty() then zero args
-    block: Block,
+    pub func_type: BasicType,
+    pub ident: Ident,
+    pub formal_params: Vec<FuncFParam>, // if is_empty() then zero args
+    pub block: Block,
 }
 
 decl_ast_node!((FuncDef, FuncDefKind));
@@ -113,7 +113,7 @@ pub enum ExpOrInitValKind {
 
 decl_ast_node!((ExpOrInitVal, ExpOrInitValKind));
 
-type InitVal = ExpOrInitVal;
+pub type InitVal = ExpOrInitVal;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum BasicTypeKind {
@@ -125,9 +125,9 @@ decl_ast_node!((BasicType, BasicTypeKind));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FuncFParamKind {
-    btype: BasicType,
-    ident: Ident,
-    array_shape: Option<Vec<Expr>>,
+    pub btype: BasicType,
+    pub ident: Ident,
+    pub array_shape: Option<Vec<Expr>>,
     // if None, then it is a normal var
     // if not None, default to have `[]` and then zero to multiple `[`Exp`]`
 }
@@ -135,7 +135,7 @@ decl_ast_node!((FuncFParam, FuncFParamKind));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BlockKind {
-    items: Vec<DeclOrStatement>,
+    pub items: Vec<DeclOrStatement>,
 }
 decl_ast_node!((Block, BlockKind));
 
@@ -160,7 +160,7 @@ pub enum StatementKind {
     IfStmt {
         cond: Expr,
         stmt: Box<Statement>,
-        else_stmt: Box<Option<Statement>>,
+        else_stmt: Option<Box<Statement>>,
     },
     WhileStmt {
         cond: Expr,
@@ -688,7 +688,7 @@ impl AST {
                 let stmt = self.parse_stmt(&it.next().unwrap());
                 let else_stmt = {
                     if let Some(stmt) = it.next() {
-                        Some(self.parse_stmt(&stmt))
+                        Some(Box::new(self.parse_stmt(&stmt)))
                     } else {
                         None
                     }
@@ -696,7 +696,7 @@ impl AST {
                 let reskind = StatementKind::IfStmt {
                     cond: cond,
                     stmt: Box::new(stmt),
-                    else_stmt: Box::new(else_stmt),
+                    else_stmt,
                 };
                 return Statement {
                     id: self.alloc_node_id(),
