@@ -1,8 +1,0 @@
-{
-    "rust-analyzer.runnableEnv": {
-
-        "LLVM_SYS_130_PREFIX": "~/llvm13"
-    },
-    "terminal.integrated.defaultProfile.linux": "zsh",
-    "terminal.integrated.altClickMovesCursor": false
-}

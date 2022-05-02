@@ -1,4 +1,6 @@
 /target
+/.cargo
+/.vscode
 pitfall.md
 *.txt
 *.sh
