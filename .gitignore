@@ -4,3 +4,5 @@
 pitfall.md
 *.txt
 *.sh
+*.ll
+*.cpp
