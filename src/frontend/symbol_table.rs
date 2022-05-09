@@ -263,6 +263,7 @@ impl AST {
             None=> None,
         }
     }
+    /// get the actual name(in String) of given symbol
     pub fn get_name2symbol(&self, sym: &Symbol) -> Option<String> {
         match self.symbol_table.table.get(&sym.0){
             Some(d)=>{

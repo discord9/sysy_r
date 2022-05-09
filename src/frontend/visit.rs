@@ -1,5 +1,6 @@
 //! AST Walker
 //! ref to [https://doc.rust-lang.org/nightly/nightly-rustc/rustc_ast/visit/trait.Visitor.html] for detailed arch
+//! walk in eval order(reverse post order that is, like a=b is walk in the order of `b` `=` `a`)
 
 use crate::frontend::visit;
 
@@ -167,12 +168,13 @@ pub fn walk_stmt<V: Visitor>(visitor: &mut V, node: &Statement){
             visitor.visit_expr(cond);
             visitor.visit_stmt(stmt);
         }
+        BreakStmt=>(),
+        ContinueStmt=>(),
         ReturnStmt(e)=>{
             if let Some(e) = e{
                 visitor.visit_expr(e);
             }
         }
-        _ => ()
     }
 }
 

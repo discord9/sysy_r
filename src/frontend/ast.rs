@@ -241,7 +241,7 @@ pub struct Ident {
 }
 
 //type NodeId = usize;
-/// Convert CST to AST
+/// Convert CST to AST and log addition information, but not actual store AST in here!
 #[allow(unused)]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AST {
@@ -251,8 +251,9 @@ pub struct AST {
     pub symbol_table: SymbolTable,
     /// When enter a new scope append a new vector, when exit a scope pop last vec
     pub sym_in_scopes: Vec<ScopeContent>,
-    /// String to index update coordingly, same name results in append a `SymbolIndex` to coording vec
+    /// String to index update coordingly, insert symbol with same name results in append a `SymbolIndex` to coording vec
     pub name2index: HashMap<String, Vec<SymbolIndex>>,
+    // root is a CompUnit
 }
 impl AST {
     /// retrun a Ident from a CST ident token
