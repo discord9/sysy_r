@@ -253,8 +253,22 @@ impl AST {
 
     /// search sym_in_scope field to find the actual symbol
     pub fn get_symbol(&self, name: &String) -> Option<Symbol> {
-        Some(Symbol(
-            *(self.name2index.get(name).unwrap()).last().unwrap(),
-        ))
+        match self.name2index.get(name){
+            Some(v) => {
+                match v.last(){
+                    Some(t)=>Some(Symbol(*t)),
+                    None=>None,
+                }
+            }
+            None=> None,
+        }
+    }
+    pub fn get_name2symbol(&self, sym: &Symbol) -> Option<String> {
+        match self.symbol_table.table.get(&sym.0){
+            Some(d)=>{
+                Some(d.name.to_owned())
+            }
+            None=>None
+        }
     }
 }
